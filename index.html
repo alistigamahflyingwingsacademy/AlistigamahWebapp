@@ -136,6 +136,18 @@ function validateFile(file, allowedTypes = ['image/jpeg','image/png','image/webp
     return { valid: true };
 }
 
+async function safeDbQuery(promise, errorMsg = "Database error") {
+    try {
+        const { data, error } = await promise;
+        if (error) throw error;
+        return data;
+    } catch (err) {
+        console.error(err);
+        showToast(`${errorMsg}: ${err.message}`, true);
+        return null;
+    }
+}
+
 // ========== SUPABASE ==========
 const SUPABASE_URL = 'https://sctxivdgqxdtpmrudotb.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_pKF1kDmzfWhcHhlINqTizw_c1iPE-yo';
@@ -158,18 +170,33 @@ let feeStructureMap = {
     'woman section': 35000
 };
 async function fetchFeeStructure() {
-    const { data, error } = await supabaseClient.from('fee_structure').select('*');
-    if (!error && data && data.length) feeStructureMap = Object.fromEntries(data.map(f => [f.section, f.amount]));
+    const data = await safeDbQuery(supabaseClient.from('fee_structure').select('*'), "Failed to load fee structure");
+    if (data && data.length) feeStructureMap = Object.fromEntries(data.map(f => [f.section, f.amount]));
 }
 
-// ========== DATA REFRESH ==========
-async function refreshSchoolData() { 
-    try {
-        const { data: students } = await supabaseClient.from('students').select('*');
-        const { data: teachers } = await supabaseClient.from('teachers').select('*');
-        schoolData.students = students || [];
-        schoolData.teachers = teachers || [];
-    } catch(e) { console.error(e); }
+// ========== DATA REFRESH (optimized with cache) ==========
+async function refreshSchoolData() {
+    const students = await safeDbQuery(supabaseClient.from('students').select('*'), "Load students failed");
+    const teachers = await safeDbQuery(supabaseClient.from('teachers').select('*'), "Load teachers failed");
+    if (students) schoolData.students = students;
+    if (teachers) schoolData.teachers = teachers;
+}
+
+// Targeted updates to avoid full refresh
+async function updateStudentStatus(studentId, newStatus) {
+    await supabaseClient.from('students').update({ status: newStatus }).eq('id', studentId);
+    const index = schoolData.students.findIndex(s => s.id === studentId);
+    if (index !== -1) schoolData.students[index].status = newStatus;
+}
+async function deleteStudentFromCache(studentId) {
+    schoolData.students = schoolData.students.filter(s => s.id !== studentId);
+}
+async function addStudentToCache(student) {
+    schoolData.students.push(student);
+}
+async function updateStudentFeeStatus(studentId, feeStatus) {
+    const index = schoolData.students.findIndex(s => s.id === studentId);
+    if (index !== -1) schoolData.students[index].fee_status = feeStatus;
 }
 
 // ========== INACTIVITY ==========
@@ -199,12 +226,9 @@ async function uploadApplicationFile(file, applicantName) {
 // ========== SLIDESHOW ==========
 async function loadSlides() { 
     try {
-        const { data, error } = await supabaseClient.from('slides').select('*').order('created_at');
-        if (error) throw error;
-        slidesData = data?.map(s=>({id:s.id, url:s.image_url, caption: escapeHtml(s.caption)})) || [];
+        const slides = await safeDbQuery(supabaseClient.from('slides').select('*').order('created_at'), "Load slides failed");
+        slidesData = slides?.map(s=>({id:s.id, url:s.image_url, caption: escapeHtml(s.caption)})) || [];
     } catch(e) {
-        console.error(e);
-        showToast("Could not load slides. Check bucket 'slides' exists and is public.", true);
         slidesData = [{ url: "https://picsum.photos/id/104/1200/600", caption: "Demo Slide" }];
     }
     if(!slidesData.length) slidesData = [{ url: "https://picsum.photos/id/104/1200/600", caption: "Our Campus" }];
@@ -261,7 +285,7 @@ window.showApplicationFormModal = function() {
     });
 };
 
-// ========== FEE HELPERS ==========
+// ========== FEE HELPERS (batched) ==========
 async function getOrCreateBalance(studentId, term, year) {
     let { data: existing } = await supabaseClient.from('fee_balances').select('*').eq('student_id',studentId).eq('term',term).eq('year',year).maybeSingle();
     if(existing) return existing;
@@ -269,6 +293,24 @@ async function getOrCreateBalance(studentId, term, year) {
     const totalFees = feeStructureMap[student?.section] || 50000;
     const { data: newBal, error } = await supabaseClient.from('fee_balances').insert({ student_id: studentId, term, year, total_fees: totalFees, paid_amount: 0, balance: totalFees }).select().single();
     if(error) throw error; return newBal;
+}
+async function getBalancesForStudents(studentIds, term, year) {
+    // Fetch existing balances for many students
+    const { data: existing } = await supabaseClient.from('fee_balances').select('*').in('student_id', studentIds).eq('term', term).eq('year', year);
+    const existingMap = new Map(existing.map(b => [b.student_id, b]));
+    const toCreate = studentIds.filter(id => !existingMap.has(id));
+    if (toCreate.length) {
+        const newBalances = toCreate.map(sid => {
+            const student = schoolData.students.find(s => s.id === sid);
+            const totalFees = feeStructureMap[student?.section] || 50000;
+            return { student_id: sid, term, year, total_fees: totalFees, paid_amount: 0, balance: totalFees };
+        });
+        await supabaseClient.from('fee_balances').insert(newBalances);
+        // Refetch to include new ones
+        const { data: all } = await supabaseClient.from('fee_balances').select('*').in('student_id', studentIds).eq('term', term).eq('year', year);
+        return all;
+    }
+    return existing;
 }
 async function recordPayment(studentId, term, year, amount, method, isAuthorized) {
     if(amount<=0) throw new Error("Amount positive");
@@ -282,6 +324,7 @@ async function recordPayment(studentId, term, year, amount, method, isAuthorized
         await supabaseClient.from('fee_balances').update({ paid_amount: newPaid, balance: balance.total_fees - newPaid }).eq('id', balance.id);
         const feeStatus = (balance.total_fees - newPaid) <= 0 ? 'Paid' : 'Partial';
         await supabaseClient.from('students').update({ fee_status: feeStatus }).eq('id', studentId);
+        updateStudentFeeStatus(studentId, feeStatus);
     }
     return receiptNo;
 }
@@ -292,13 +335,13 @@ async function loginAdmin(email, pwd) {
     try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd }); 
         if(error) throw new Error(error.message); 
-        const { data: profile, error: profileError } = await supabaseClient.from('profiles').select('*').eq('id', data.user.id).single(); 
-        if(profileError || !profile) throw new Error(`No profile.`);
+        const profile = await safeDbQuery(supabaseClient.from('profiles').select('*').eq('id', data.user.id).single(), "Profile fetch failed");
+        if(!profile) throw new Error(`No profile.`);
         const allowed = ['dg_ceo','umc','daf','do','der','dprpa'];
         if(!allowed.includes(profile.role)) throw new Error(`Role '${profile.role}' not allowed.`);
         currentUser = { id: profile.id, full_name: profile.full_name, role: profile.role }; 
         await refreshSchoolData(); 
-        try { showDashboard(); } catch(err) { console.error(err); showToast("Dashboard error: "+err.message, true); }
+        showDashboard();
         resetInactivityTimer(); attachActivityListeners(); 
         hideLoading();
     } catch(err) { hideLoading(); showToast(err.message, true); }
@@ -306,20 +349,21 @@ async function loginAdmin(email, pwd) {
 async function loginStaff(username, pwd) { 
     showLoading();
     try {
-        const { data: staff, error: staffError } = await supabaseClient.from('teachers').select('*').eq('username', username).single();
-        if (staffError || !staff) throw new Error(`Staff username not found.`);
+        const staff = await safeDbQuery(supabaseClient.from('teachers').select('*').eq('username', username).single(), "Staff lookup failed");
+        if (!staff) throw new Error(`Staff username not found.`);
         const email = staff.email;
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
         if (error) throw new Error(`Authentication failed: ${error.message}`);
-        const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', data.user.id).single();
+        const profile = await safeDbQuery(supabaseClient.from('profiles').select('*').eq('id', data.user.id).single(), "Profile fetch failed");
         if (!profile || profile.role !== 'staff') throw new Error("Not a staff account");
         currentUser = { id: profile.id, full_name: profile.full_name, role: staff.role, isStaff: true, staffId: staff.id, section: staff.assigned_section, user_id: data.user.id };
         await refreshSchoolData(); 
-        try { showDashboard(); } catch(err) { console.error(err); showToast("Dashboard error: "+err.message, true); }
+        showDashboard();
         resetInactivityTimer(); attachActivityListeners();
         hideLoading();
     } catch(err) { hideLoading(); showToast(err.message, true); }
 }
+// Parent login remains original (no Supabase auth) as instructed
 async function parentLogin(regNo, pwd) { 
     showLoading();
     try {
@@ -329,7 +373,7 @@ async function parentLogin(regNo, pwd) {
         if(!student) throw new Error(`Student not found`);
         if(student.status !== 'active') throw new Error(`Student account suspended.`);
         currentUser = { role: "parent", full_name: `Parent of ${student.name}`, studentId: student.id }; 
-        try { showDashboard(); } catch(err) { console.error(err); showToast("Dashboard error: "+err.message, true); }
+        showDashboard();
         resetInactivityTimer(); attachActivityListeners();
         hideLoading();
     } catch(err) { hideLoading(); showToast(err.message, true); }
@@ -406,7 +450,7 @@ function getNavItemsByRole() {
     }
 }
 
-// ========== RENDER FUNCTIONS ==========
+// ========== RENDER FUNCTIONS (using event delegation) ==========
 async function renderStudentsList() {
     let html = `<div class="bg-white p-5 rounded-xl shadow"><h2 class="text-2xl font-bold mb-3">📚 Student Registry</h2><div class="flex gap-3 mb-4"><select id="sectionFilter" class="border p-2 rounded"><option>All Sections</option>${SECTIONS.map(s=>`<option>${escapeHtml(s)}</option>`)}</select><input id="searchStudent" placeholder="Search name/reg" class="border p-2 rounded"></div><div class="overflow-x-auto"><table class="w-full border"><thead class="bg-gray-100"><tr><th>Reg No</th><th>Name</th><th>Parent</th><th>Section</th><th>Fee Status</th>${(currentUser.role==='dg_ceo'||currentUser.role==='umc'||currentUser.role==='daf'||currentUser.role==='do')?'<th>Actions</th>':''} </thead><tbody id="stuTbody"></tbody> </table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
@@ -414,28 +458,19 @@ async function renderStudentsList() {
         let filtered = schoolData.students.filter(s=> document.getElementById("sectionFilter").value==='All Sections' || s.section === document.getElementById("sectionFilter").value);
         let search = document.getElementById("searchStudent").value.toLowerCase();
         if(search) filtered = filtered.filter(s=> s.name.toLowerCase().includes(search) || s.reg_number.toLowerCase().includes(search));
-        document.getElementById("stuTbody").innerHTML = filtered.map(s=>`<tr class="border-b"><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td><td class="p-2">${escapeHtml(s.section)}</td><td class="p-2"><span class="${s.fee_status==='Paid'?'active-badge':'suspended-badge'}">${escapeHtml(s.fee_status)}</span></td>${(currentUser.role==='dg_ceo'||currentUser.role==='umc')?`<td class="p-2"><button onclick="window.toggleStudentStatus('${s.id}','${s.status}')" class="suspend-btn">Toggle</button><button onclick="window.deleteStudentCascade('${s.id}')" class="delete-btn">Delete</button></td>`:''}</tr>`).join('');
+        document.getElementById("stuTbody").innerHTML = filtered.map(s=>`<tr class="border-b" data-student-id="${s.id}"><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td><td class="p-2">${escapeHtml(s.section)}</td><td class="p-2"><span class="status-badge ${s.fee_status==='Paid'?'active-badge':'suspended-badge'}">${escapeHtml(s.fee_status)}</span></td>${(currentUser.role==='dg_ceo'||currentUser.role==='umc')?`<td class="p-2"><button class="suspend-btn" data-id="${s.id}" data-status="${s.status}">Toggle</button><button class="delete-btn" data-id="${s.id}">Delete</button></td>`:''}</tr>`).join('');
     };
     document.getElementById("sectionFilter").addEventListener("change", filter); document.getElementById("searchStudent").addEventListener("input", filter); filter();
-    window.toggleStudentStatus = async (id,cur)=>{ let newStat = cur==='active'?'suspended':'active'; await supabaseClient.from('students').update({status:newStat}).eq('id',id); await refreshSchoolData(); renderStudentsList(); };
-    window.deleteStudentCascade = async (id)=>{ 
-        if(confirm("Delete student & ALL related records?")){
-            await supabaseClient.from('fee_transactions').delete().eq('student_id',id);
-            await supabaseClient.from('fee_balances').delete().eq('student_id',id);
-            await supabaseClient.from('student_results').delete().eq('student_id',id);
-            await supabaseClient.from('student_positions').delete().eq('student_id',id);
-            await supabaseClient.from('students').delete().eq('id',id);
-            await refreshSchoolData(); renderStudentsList(); showToast("Deleted");
-        } 
-    };
 }
 async function renderEnrollStudent() {
     if(!['dg_ceo','umc','headteacher'].includes(currentUser.role)) return showToast("Access denied",true);
     document.getElementById("mainContent").innerHTML = `<div class="bg-white p-6 rounded-xl"><h2>🎓 Enroll New Student</h2><form id="enrollForm"><input id="regNum" placeholder="Reg Number (unique)" required class="border p-2 w-full mb-2"><input id="stuName" placeholder="Full Name" required class="border p-2 w-full mb-2"><input id="parentName" placeholder="Parent/Guardian" class="border p-2 w-full mb-2"><select id="secSelect" class="border p-2 w-full mb-2">${SECTIONS.map(s=>`<option>${escapeHtml(s)}</option>`)}</select><button type="submit" class="apply-btn w-full py-2 rounded">Register</button></form></div>`;
     document.getElementById("enrollForm").addEventListener("submit", async(e)=>{
         e.preventDefault(); const reg = document.getElementById("regNum").value.trim(), name = document.getElementById("stuName").value.trim(); if(!reg || !name) return showToast("Required fields",true);
-        await supabaseClient.from('students').insert([{ reg_number: reg, name, parent_name: document.getElementById("parentName").value, section: document.getElementById("secSelect").value, fee_status: 'Pending', status:'active' }]);
-        await refreshSchoolData(); renderStudentsList(); showToast("Enrolled");
+        const { data: newStudent, error } = await supabaseClient.from('students').insert([{ reg_number: reg, name, parent_name: document.getElementById("parentName").value, section: document.getElementById("secSelect").value, fee_status: 'Pending', status:'active' }]).select().single();
+        if(error) { showToast(error.message, true); return; }
+        await addStudentToCache(newStudent);
+        renderStudentsList(); showToast("Enrolled");
     });
 }
 async function renderFeeManagement() {
@@ -449,7 +484,7 @@ async function renderFeeManagement() {
         const { data: txns } = await supabaseClient.from('fee_transactions').select('*').eq('student_id',studentId).eq('term',term).eq('year',year);
         const student = schoolData.students.find(s=>s.id==studentId);
         const percent = (balance.paid_amount/balance.total_fees)*100;
-        let panel = `<div class="border p-4 rounded"><p><strong>${escapeHtml(student.name)}</strong> | Total: ₦${balance.total_fees.toLocaleString()} | Paid: ₦${balance.paid_amount} | Balance: <span class="font-bold ${balance.balance>0?'text-red-600':'text-green-600'}">₦${balance.balance}</span></p><div class="progress-bar mt-2"><div class="progress-fill" style="width: ${percent}%"></div></div><table class="w-full text-sm mt-3 border"><thead><tr><th>Date</th><th>Amount</th><th>Receipt</th><th>Status</th><th>Action</th></tr></thead><tbody>${txns.map(t=>`<tr><td>${new Date(t.payment_date).toLocaleDateString()}</td><td>₦${t.amount_paid}</td><td>${t.receipt_no}</td><td class="${t.status==='authorized'?'text-green-600':'text-orange-500'}">${t.status}</td><td>${t.status!=='authorized' && ['dg_ceo','daf','do'].includes(currentUser.role) ? `<button class="authTx text-blue-600" data-id="${t.id}">Authorize</button>` : '-'}</td></tr>`).join('')}</tbody></table><div class="mt-4"><input id="paymentAmount" type="number" placeholder="Amount (₦)" class="border p-2 rounded"><select id="paymentMethod"><option>cash</option><option>bank_transfer</option></select><button id="payNowBtn" class="apply-btn px-4 py-1 rounded ml-2">Record Payment</button></div></div>`;
+        let panel = `<div class="border p-4 rounded"><p><strong>${escapeHtml(student.name)}</strong> | Total: ₦${balance.total_fees.toLocaleString()} | Paid: ₦${balance.paid_amount} | Balance: <span class="font-bold ${balance.balance>0?'text-red-600':'text-green-600'}">₦${balance.balance}</span></p><div class="progress-bar mt-2"><div class="progress-fill" style="width: ${percent}%"></div></div><table class="w-full text-sm mt-3 border"><thead><tr><th>Date</th><th>Amount</th><th>Receipt</th><th>Status</th><th>Action</th></tr></thead><tbody>${txns.map(t=>`<tr><td>${new Date(t.payment_date).toLocaleDateString()}</td><td>₦${t.amount_paid}</td><td>${t.receipt_no}</td><td class="${t.status==='authorized'?'text-green-600':'text-orange-500'}">${t.status}</td><td>${t.status!=='authorized' && ['dg_ceo','daf','do'].includes(currentUser.role) ? `<button class="authTx text-blue-600" data-id="${t.id}">Authorize</button>` : '-'}</td></tr>`).join('')}</tbody>}</table><div class="mt-4"><input id="paymentAmount" type="number" placeholder="Amount (₦)" class="border p-2 rounded"><select id="paymentMethod"><option>cash</option><option>bank_transfer</option></select><button id="payNowBtn" class="apply-btn px-4 py-1 rounded ml-2">Record Payment</button></div></div>`;
         document.getElementById("feeDetailsPanel").innerHTML = panel;
         document.getElementById("payNowBtn").onclick = async ()=>{
             try {
@@ -471,6 +506,7 @@ async function renderFeeManagement() {
             await supabaseClient.from('fee_balances').update({ paid_amount: newPaid, balance: bal.total_fees - newPaid }).eq('id', bal.id);
             const feeStatus = (bal.total_fees - newPaid) <= 0 ? 'Paid' : 'Partial';
             await supabaseClient.from('students').update({ fee_status: feeStatus }).eq('id', studentId);
+            updateStudentFeeStatus(studentId, feeStatus);
             showToast("Authorized and balance updated"); 
             document.getElementById("loadFeeBtn").click();
         });
@@ -478,7 +514,7 @@ async function renderFeeManagement() {
 }
 async function renderStaffManagement() {
     if(!['dg_ceo','umc','der','do'].includes(currentUser.role)) return showToast("Access denied",true);
-    const { data: teachers } = await supabaseClient.from('teachers').select('*');
+    const teachers = await safeDbQuery(supabaseClient.from('teachers').select('*'), "Load staff failed");
     let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👥 Staff Management</h2>
     <form id="staffForm" class="grid md:grid-cols-2 gap-3 mt-4">
         <input id="staffUsername" placeholder="Username (unique)" required class="border p-2 rounded">
@@ -496,30 +532,15 @@ async function renderStaffManagement() {
         <input id="staffPassword" value="password123" class="border p-2 rounded">
         <button type="submit" class="apply-btn py-2 rounded">Register Staff</button>
     </form>
-    <table class="w-full border mt-6"><thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Section</th><th>Salary</th><th>Actions</th></tr></thead><tbody id="staffTableBody"></tbody></table></div>`;
+    <table class="w-full border mt-6"><thead><tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Section</th><th>Salary</th><th>Actions</th></tr></thead><tbody id="staffTableBody"></tbody> </table></div>`;
     document.getElementById("mainContent").innerHTML = html;
-    const renderStaffTable = async () => {
+    const renderStaffTable = (teachersList) => {
         const tb = document.getElementById("staffTableBody"); tb.innerHTML = "";
-        for(let st of teachers||[]){
+        for(let st of teachersList||[]){
             tb.innerHTML += `<tr><td class="p-2">${escapeHtml(st.username)}</td><td class="p-2">${escapeHtml(st.name)}</td><td class="p-2">${escapeHtml(st.email)}</td><td class="p-2">${escapeHtml(st.role)}</td><td class="p-2">${escapeHtml(st.assigned_section||'-')}</td><td class="p-2">₦${st.salary?.toLocaleString() || 0}</td><td class="p-2"><button class="deleteStaffBtn delete-btn" data-id="${st.id}" data-email="${st.email}">Delete</button></td></tr>`;
         }
-        document.querySelectorAll('.deleteStaffBtn').forEach(btn=>btn.addEventListener('click',async()=>{
-            if(confirm("Delete staff member? This will also remove their login account.")){
-                const staffId = btn.dataset.id;
-                const email = btn.dataset.email;
-                const { data: profile } = await supabaseClient.from('profiles').select('id').eq('email', email).single();
-                if(profile) {
-                    await supabaseClient.from('profiles').delete().eq('id', profile.id);
-                    showToast("Profile deleted. Auth user must be deleted manually.", true);
-                }
-                await supabaseClient.from('teachers').delete().eq('id', staffId);
-                await refreshSchoolData();
-                renderStaffManagement();
-                showToast("Staff deleted");
-            }
-        }));
     };
-    await renderStaffTable();
+    renderStaffTable(teachers);
     document.getElementById("staffForm")?.addEventListener("submit", async(e)=>{
         e.preventDefault();
         const username = document.getElementById("staffUsername").value.trim();
@@ -531,7 +552,7 @@ async function renderStaffManagement() {
         const level = document.getElementById("staffLevel").value;
         const salary = parseInt(document.getElementById("staffSalary").value) || 0;
         if(!username || !email || !pwd || !name) return showToast("Username, Name, Email, Password required", true);
-        const { data: existing } = await supabaseClient.from('teachers').select('username').eq('username', username).maybeSingle();
+        const existing = await safeDbQuery(supabaseClient.from('teachers').select('username').eq('username', username).maybeSingle(), "Check username");
         if(existing) return showToast("Username already taken", true);
         const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email, password: pwd });
         if(authError) throw authError;
@@ -541,19 +562,43 @@ async function renderStaffManagement() {
         renderStaffManagement();
         showToast(`Staff registered with username: ${username}`);
     });
+    // Event delegation for delete buttons
+    document.getElementById("mainContent").addEventListener("click", async (e) => {
+        if (e.target.classList.contains("deleteStaffBtn")) {
+            if(confirm("Delete staff member? This will also remove their login account.")){
+                const staffId = e.target.dataset.id;
+                const email = e.target.dataset.email;
+                const profile = await safeDbQuery(supabaseClient.from('profiles').select('id').eq('email', email).single(), "Find profile");
+                if(profile) {
+                    await supabaseClient.from('profiles').delete().eq('id', profile.id);
+                    showToast("Profile deleted. Auth user must be deleted manually.", true);
+                }
+                await supabaseClient.from('teachers').delete().eq('id', staffId);
+                await refreshSchoolData();
+                renderStaffManagement();
+                showToast("Staff deleted");
+            }
+        }
+    });
 }
 async function renderApplicationsList() {
     if(!['dg_ceo','umc'].includes(currentUser.role)) return;
-    const { data } = await supabaseClient.from('admission_applications').select('*');
-    let html = `<div class="bg-white p-5 rounded-xl"><h2 class="text-2xl font-bold">📋 Applications</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Name</th><th>Email</th><th>Status</th><th>Action</th></tr></thead><tbody>${data.map(app=>`<tr><td class="p-2">${escapeHtml(app.full_name)}</td><td class="p-2">${escapeHtml(app.parent_email)}</td><td class="p-2"><span class="status-badge status-${app.status}">${app.status}</span></td><td class="p-2"><button onclick="window.viewAppDetails('${app.id}')" class="bg-blue-600 text-white p-1 rounded text-xs">Details</button></td></tr>`).join('')}</tbody></table></div></div>`;
+    const data = await safeDbQuery(supabaseClient.from('admission_applications').select('*'), "Load applications failed");
+    let html = `<div class="bg-white p-5 rounded-xl"><h2 class="text-2xl font-bold">📋 Applications</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Name</th><th>Email</th><th>Status</th><th>Action</th></tr></thead><tbody>${data?.map(app=>`<tr><td class="p-2">${escapeHtml(app.full_name)}</td><td class="p-2">${escapeHtml(app.parent_email)}</td><td class="p-2"><span class="status-badge status-${app.status}">${app.status}</span></td><td class="p-2"><button class="viewAppDetailsBtn bg-blue-600 text-white p-1 rounded text-xs" data-id="${app.id}">Details</button></td></tr>`).join('')}</tbody> </table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
-    window.viewAppDetails = async (id) => { const {data:app} = await supabaseClient.from('admission_applications').select('*').eq('id',id).single(); alert(JSON.stringify(app.form_data,null,2)); };
+    document.getElementById("mainContent").addEventListener("click", async (e) => {
+        if (e.target.classList.contains("viewAppDetailsBtn")) {
+            const id = e.target.dataset.id;
+            const app = await safeDbQuery(supabaseClient.from('admission_applications').select('*').eq('id',id).single(), "Load app details");
+            if(app) alert(JSON.stringify(app.form_data,null,2));
+        }
+    });
 }
 async function renderManageAnnouncement() {
     if(currentUser.role !== 'dg_ceo') return showToast("DG only",true);
     let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📢 Update Announcement</h2><textarea id="announceText" rows="3" class="w-full border rounded p-2"></textarea><button id="saveAnnounce" class="apply-btn mt-3 px-4 py-2 rounded">Save</button></div>`;
     document.getElementById("mainContent").innerHTML = html;
-    const { data } = await supabaseClient.from('site_announcement').select('content').eq('id',1).single();
+    const data = await safeDbQuery(supabaseClient.from('site_announcement').select('content').eq('id',1).single(), "Load announcement");
     if(data) document.getElementById("announceText").value = data.content;
     document.getElementById("saveAnnounce").onclick = async()=>{
         const newContent = document.getElementById("announceText").value;
@@ -564,8 +609,8 @@ async function renderManageAnnouncement() {
 }
 async function renderManageSlides() {
     if (currentUser.role !== 'dg_ceo') return showToast("DG only", true);
-    const { data: slides, error } = await supabaseClient.from('slides').select('*').order('created_at');
-    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📸 Manage Slides</h2><div class="mb-4 flex flex-wrap gap-2"><input type="file" id="slideUpload" accept="image/*" class="border p-2 rounded"><input id="slideCaption" placeholder="Caption" class="border p-2 rounded flex-1"><button id="uploadSlideBtn" class="apply-btn px-4 py-2 rounded">Upload</button></div><div class="grid grid-cols-2 md:grid-cols-3 gap-4">${slides?.map(s => `<div class="border rounded p-2 bg-white shadow"><img src="${s.image_url}" class="h-32 w-full object-cover rounded"><p class="mt-1 text-sm">${escapeHtml(s.caption)}</p><button data-id="${s.id}" class="delete-slide-btn delete-btn mt-2 w-full">Delete</button></div>`).join('') || '<p class="col-span-full text-gray-500">No slides yet. Upload one above.</p>'}</div></div>`;
+    const slides = await safeDbQuery(supabaseClient.from('slides').select('*').order('created_at'), "Load slides failed");
+    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📸 Manage Slides</h2><div class="mb-4 flex flex-wrap gap-2"><input type="file" id="slideUpload" accept="image/*" class="border p-2 rounded"><input id="slideCaption" placeholder="Caption" class="border p-2 rounded flex-1"><button id="uploadSlideBtn" class="apply-btn px-4 py-2 rounded">Upload</button></div><div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="slidesGrid">${slides?.map(s => `<div class="border rounded p-2 bg-white shadow" data-slide-id="${s.id}"><img src="${s.image_url}" class="h-32 w-full object-cover rounded"><p class="mt-1 text-sm">${escapeHtml(s.caption)}</p><button class="delete-slide-btn delete-btn mt-2 w-full">Delete</button></div>`).join('') || '<p class="col-span-full text-gray-500">No slides yet. Upload one above.</p>'}</div></div>`;
     document.getElementById("mainContent").innerHTML = html;
     document.getElementById("uploadSlideBtn").onclick = async () => {
         const file = document.getElementById("slideUpload").files[0];
@@ -582,14 +627,26 @@ async function renderManageSlides() {
             await loadSlides();
         } catch (err) { showToast(err.message, true); } finally { btn.disabled = false; btn.innerText = "Upload"; document.getElementById("slideUpload").value = ''; document.getElementById("slideCaption").value = ''; }
     };
-    document.querySelectorAll('.delete-slide-btn').forEach(btn => { btn.onclick = async () => { if(confirm("Delete?")){ await supabaseClient.from('slides').delete().eq('id', btn.dataset.id); await renderManageSlides(); await loadSlides(); } }; });
+    document.getElementById("mainContent").addEventListener("click", async (e) => {
+        if (e.target.classList.contains("delete-slide-btn")) {
+            if(confirm("Delete?")){
+                const slideDiv = e.target.closest("[data-slide-id]");
+                const slideId = slideDiv ? slideDiv.dataset.slideId : null;
+                if(slideId) {
+                    await supabaseClient.from('slides').delete().eq('id', slideId);
+                    await renderManageSlides();
+                    await loadSlides();
+                }
+            }
+        }
+    });
 }
 async function renderDownloadRecords() {
     const html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold mb-4">📥 Download Records</h2><div class="grid md:grid-cols-2 gap-4"><button id="exportStudentsCSV" class="apply-btn px-4 py-2 rounded">Export Students (CSV)</button><button id="exportFeesCSV" class="apply-btn px-4 py-2 rounded">Export Fee Transactions (CSV)</button><button id="exportResultsCSV" class="apply-btn px-4 py-2 rounded">Export Results (CSV)</button></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
     document.getElementById("exportStudentsCSV").onclick = () => exportToCSV(schoolData.students, 'students.csv');
-    document.getElementById("exportFeesCSV").onclick = async () => { const { data } = await supabaseClient.from('fee_transactions').select('*'); exportToCSV(data, 'fee_transactions.csv'); };
-    document.getElementById("exportResultsCSV").onclick = async () => { const { data } = await supabaseClient.from('student_results').select('*'); exportToCSV(data, 'student_results.csv'); };
+    document.getElementById("exportFeesCSV").onclick = async () => { const data = await safeDbQuery(supabaseClient.from('fee_transactions').select('*'), "Load fees failed"); exportToCSV(data, 'fee_transactions.csv'); };
+    document.getElementById("exportResultsCSV").onclick = async () => { const data = await safeDbQuery(supabaseClient.from('student_results').select('*'), "Load results failed"); exportToCSV(data, 'student_results.csv'); };
     function exportToCSV(data, filename) { if (!data?.length) { showToast("No data", true); return; } const headers = Object.keys(data[0]); const csvRows = [headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',')]; for (const row of data) { const values = headers.map(h => { let val = row[h] || ''; if (typeof val === 'string') val = val.replace(/"/g, '""'); return `"${val}"`; }); csvRows.push(values.join(',')); } const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href); }
 }
 async function renderReceiptGenerator() {
@@ -598,8 +655,8 @@ async function renderReceiptGenerator() {
     document.getElementById("generateReceiptBtn").onclick = async () => {
         const studentId = document.getElementById("receiptStudentSelect").value, term = document.getElementById("receiptTerm").value, year = document.getElementById("receiptYear").value;
         if (!studentId) return showToast("Select student", true);
-        const { data: txs } = await supabaseClient.from('fee_transactions').select('*').eq('student_id',studentId).eq('term',term).eq('year',year).eq('status','authorized');
-        if (!txs.length) { showToast("No authorized payments", true); return; }
+        const txs = await safeDbQuery(supabaseClient.from('fee_transactions').select('*').eq('student_id',studentId).eq('term',term).eq('year',year).eq('status','authorized'), "Load txns failed");
+        if (!txs?.length) { showToast("No authorized payments", true); return; }
         const student = schoolData.students.find(s=>s.id==studentId);
         const total = txs.reduce((s,t)=>s+t.amount_paid,0);
         const receiptHtml = `<div class="receipt-card"><div class="text-center border-b pb-4"><h2 class="text-xl font-bold">Al‑Istiqaamah Flying Wings Academy</h2><p>TERM RECEIPT</p></div><div><p><strong>Student:</strong> ${escapeHtml(student.name)} (${escapeHtml(student.reg_number)})</p><p><strong>Term ${term} ${year}</strong></p><p><strong>Total Paid:</strong> ₦${total.toLocaleString()}</p></div><div class="text-center mt-4"><button onclick="window.print()" class="apply-btn px-4 py-1 rounded">Print</button></div></div>`;
@@ -607,14 +664,14 @@ async function renderReceiptGenerator() {
     };
 }
 async function renderPayroll() {
-    const { data: teachers } = await supabaseClient.from('teachers').select('name, salary, role');
+    const teachers = await safeDbQuery(supabaseClient.from('teachers').select('name, salary, role'), "Load staff failed");
     let total = teachers?.reduce((s,t)=>s+(t.salary||0),0)||0;
     let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👥 Payroll Summary</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Name</th><th>Role</th><th>Salary (₦)</th></tr></thead><tbody>${teachers?.map(t=>`<tr><td class="p-2">${escapeHtml(t.name)}</td><td class="p-2">${escapeHtml(t.role)}</td><td class="p-2">₦${(t.salary||0).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="3">No staff data</td></tr>'}</tbody><tfoot><tr class="bg-gray-100"><td colspan="2" class="font-bold">Total Monthly</td><td class="font-bold">₦${total.toLocaleString()}</td></tr></tfoot></table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
 }
 async function renderPaymentReport() {
-    const { data } = await supabaseClient.from('fee_transactions').select('*, students(name, reg_number)').order('payment_date', {ascending:false});
-    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📃 Payment Report</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Date</th><th>Student</th><th>Reg No</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>${data?.map(tx => `<tr><td class="p-2">${new Date(tx.payment_date).toLocaleDateString()}</td><td class="p-2">${escapeHtml(tx.students?.name || '-')}</td><td class="p-2">${escapeHtml(tx.students?.reg_number || '-')}</td><td class="p-2">₦${tx.amount_paid}</td><td class="p-2">${tx.payment_method}</td><td class="p-2 ${tx.status==='authorized'?'text-green-600':'text-orange-500'}">${tx.status}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center">No transactions</td></tr>'}</tbody></table></div></div>`;
+    const data = await safeDbQuery(supabaseClient.from('fee_transactions').select('*, students(name, reg_number)').order('payment_date', {ascending:false}), "Load payments failed");
+    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📃 Payment Report</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Date</th><th>Student</th><th>Reg No</th><th>Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>${data?.map(tx => `<tr><td class="p-2">${new Date(tx.payment_date).toLocaleDateString()}</td><td class="p-2">${escapeHtml(tx.students?.name || '-')}</td><td class="p-2">${escapeHtml(tx.students?.reg_number || '-')}</td><td class="p-2">₦${tx.amount_paid}</td><td class="p-2">${tx.payment_method}</td><td class="p-2 ${tx.status==='authorized'?'text-green-600':'text-orange-500'}">${tx.status}</td></tr>`).join('') || '<tr><td colspan="6" class="text-center">No transactions</td></tr>'}</tbody> </table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
 }
 async function renderAcademicPerformance() {
@@ -643,10 +700,10 @@ async function renderSectionAnalysis() {
     let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📊 Section Analysis</h2><div class="grid md:grid-cols-2 gap-4 mt-4">${Object.entries(analysis).map(([sec, data]) => `<div class="border p-3 rounded"><h3 class="font-bold">${escapeHtml(sec)}</h3><p>Total: ${data.total}</p><p>Active: ${data.active}</p></div>`).join('')}</div></div>`;
     document.getElementById("mainContent").innerHTML = html;
 }
-async function renderSectionStudents() { if(!currentUser.section) return showToast("No section assigned", true); const filtered = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👨‍🎓 Section: ${escapeHtml(currentUser.section)}</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Reg No</th><th>Name</th><th>Parent</th><th>Fee Status</th></tr></thead><tbody>${filtered.map(s=>`<tr><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td><td class="p-2">${s.fee_status}</td></tr>`).join('')}</tbody></table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
-async function renderSectionFees() { if(!currentUser.section) return showToast("No section assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let total = 0; for(let s of students) { const { data: txs } = await supabaseClient.from('fee_transactions').select('amount_paid').eq('student_id',s.id).eq('status','authorized'); if(txs) total += txs.reduce((sum,t)=>sum+t.amount_paid,0); } document.getElementById("mainContent").innerHTML = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">💰 Section Fees - ${escapeHtml(currentUser.section)}</h2><p class="mt-2">Total Collected: ₦${total.toLocaleString()}</p><p>Total Students: ${students.length}</p></div>`; }
-async function renderMyClass() { if(!currentUser.section) return showToast("No class assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👩‍🏫 My Class (${escapeHtml(currentUser.section)})</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Reg No</th><th>Name</th><th>Parent</th></tr></thead><tbody>${students.map(s=>`<tr><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td></tr>`).join('')}</tbody></table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
-async function renderGradeStudent() { if(!currentUser.section) return showToast("No class assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📝 Grade Student (${escapeHtml(currentUser.section)})</h2><div class="mb-4"><select id="gradeStudentSelect" class="border p-2 rounded"><option value="">Select Student</option>${students.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`)}</select></div><div id="gradeFormContainer"></div></div>`; document.getElementById("mainContent").innerHTML = html; document.getElementById("gradeStudentSelect").onchange = async () => { const studentId = document.getElementById("gradeStudentSelect").value; if(!studentId) return; const term = prompt("Term (1-3):", "1"); if(!term) return; const year = prompt("Year:", "2026"); const { data: existing } = await supabaseClient.from('student_results').select('*').eq('student_id',studentId).eq('term',term).eq('year',year); let editor = `<div><div id="gradeRows"></div><button id="addGradeSubject" class="apply-btn px-2 py-1 text-sm rounded mt-2">+ Subject</button><button id="saveGrades" class="apply-btn px-4 py-2 rounded ml-2">Save Grades</button></div>`; document.getElementById("gradeFormContainer").innerHTML = editor; const container = document.getElementById("gradeRows"); const addRow = (data=null) => { const div = document.createElement('div'); div.className = 'grade-subject-row'; div.innerHTML = `<input class="subj border p-1" placeholder="Subject" value="${data?.subject||''}"><input class="ca1 grade-input" type="number" placeholder="CA1" value="${data?.ca1||0}" min="0" max="40"><input class="ca2 grade-input" type="number" placeholder="CA2" value="${data?.ca2||0}" min="0" max="40"><input class="exam grade-input" type="number" placeholder="Exam" value="${data?.exam||0}" min="0" max="60"><button class="remove-subject-btn">Remove</button>`; div.querySelector('.remove-subject-btn').onclick = () => div.remove(); container.appendChild(div); }; if(existing?.length) existing.forEach(addRow); else addRow(); document.getElementById("addGradeSubject").onclick = () => addRow(); document.getElementById("saveGrades").onclick = async () => { await supabaseClient.from('student_results').delete().eq('student_id',studentId).eq('term',term).eq('year',year); for(let row of document.querySelectorAll('#gradeRows .grade-subject-row')) { let subject = row.querySelector('.subj').value.trim(); if(!subject) continue; let ca1 = parseInt(row.querySelector('.ca1').value)||0, ca2 = parseInt(row.querySelector('.ca2').value)||0, exam = parseInt(row.querySelector('.exam').value)||0, total = ca1+ca2+exam, grade = total>=80?'A':total>=70?'B':total>=60?'C':total>=50?'D':'E'; await supabaseClient.from('student_results').insert([{ student_id: studentId, term, year, subject, ca1, ca2, exam, total, grade }]); } showToast("Grades saved"); }; }; }
+async function renderSectionStudents() { if(!currentUser.section) return showToast("No section assigned", true); const filtered = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👨‍🎓 Section: ${escapeHtml(currentUser.section)}</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Reg No</th><th>Name</th><th>Parent</th><th>Fee Status</th></tr></thead><tbody>${filtered.map(s=>`<tr><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td><td class="p-2">${s.fee_status}</td></tr>`).join('')}</tbody> </table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
+async function renderSectionFees() { if(!currentUser.section) return showToast("No section assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let total = 0; for(let s of students) { const txs = await safeDbQuery(supabaseClient.from('fee_transactions').select('amount_paid').eq('student_id',s.id).eq('status','authorized'), "Load fee transactions"); if(txs) total += txs.reduce((sum,t)=>sum+t.amount_paid,0); } document.getElementById("mainContent").innerHTML = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">💰 Section Fees - ${escapeHtml(currentUser.section)}</h2><p class="mt-2">Total Collected: ₦${total.toLocaleString()}</p><p>Total Students: ${students.length}</p></div>`; }
+async function renderMyClass() { if(!currentUser.section) return showToast("No class assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👩‍🏫 My Class (${escapeHtml(currentUser.section)})</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Reg No</th><th>Name</th><th>Parent</th></tr></thead><tbody>${students.map(s=>`<tr><td class="p-2">${escapeHtml(s.reg_number)}</td><td class="p-2">${escapeHtml(s.name)}</td><td class="p-2">${escapeHtml(s.parent_name||'-')}</td></tr>`).join('')}</tbody> </table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
+async function renderGradeStudent() { if(!currentUser.section) return showToast("No class assigned", true); const students = schoolData.students.filter(s=>s.section === currentUser.section); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📝 Grade Student (${escapeHtml(currentUser.section)})</h2><div class="mb-4"><select id="gradeStudentSelect" class="border p-2 rounded"><option value="">Select Student</option>${students.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`)}</select></div><div id="gradeFormContainer"></div></div>`; document.getElementById("mainContent").innerHTML = html; document.getElementById("gradeStudentSelect").onchange = async () => { const studentId = document.getElementById("gradeStudentSelect").value; if(!studentId) return; const term = prompt("Term (1-3):", "1"); if(!term) return; const year = prompt("Year:", "2026"); const existing = await safeDbQuery(supabaseClient.from('student_results').select('*').eq('student_id',studentId).eq('term',term).eq('year',year), "Load existing grades"); let editor = `<div><div id="gradeRows"></div><button id="addGradeSubject" class="apply-btn px-2 py-1 text-sm rounded mt-2">+ Subject</button><button id="saveGrades" class="apply-btn px-4 py-2 rounded ml-2">Save Grades</button></div>`; document.getElementById("gradeFormContainer").innerHTML = editor; const container = document.getElementById("gradeRows"); const addRow = (data=null) => { const div = document.createElement('div'); div.className = 'grade-subject-row'; div.innerHTML = `<input class="subj border p-1" placeholder="Subject" value="${data?.subject||''}"><input class="ca1 grade-input" type="number" placeholder="CA1" value="${data?.ca1||0}" min="0" max="40"><input class="ca2 grade-input" type="number" placeholder="CA2" value="${data?.ca2||0}" min="0" max="40"><input class="exam grade-input" type="number" placeholder="Exam" value="${data?.exam||0}" min="0" max="60"><button class="remove-subject-btn">Remove</button>`; div.querySelector('.remove-subject-btn').onclick = () => div.remove(); container.appendChild(div); }; if(existing?.length) existing.forEach(addRow); else addRow(); document.getElementById("addGradeSubject").onclick = () => addRow(); document.getElementById("saveGrades").onclick = async () => { await supabaseClient.from('student_results').delete().eq('student_id',studentId).eq('term',term).eq('year',year); for(let row of document.querySelectorAll('#gradeRows .grade-subject-row')) { let subject = row.querySelector('.subj').value.trim(); if(!subject) continue; let ca1 = parseInt(row.querySelector('.ca1').value)||0, ca2 = parseInt(row.querySelector('.ca2').value)||0, exam = parseInt(row.querySelector('.exam').value)||0, total = ca1+ca2+exam, grade = total>=80?'A':total>=70?'B':total>=60?'C':total>=50?'D':'E'; await supabaseClient.from('student_results').insert([{ student_id: studentId, term, year, subject, ca1, ca2, exam, total, grade }]); } showToast("Grades saved"); }; }; }
 async function renderAttendanceAppraisal() {
     let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">🗒 Attendance & Appraisal</h2><select id="attStudentSelect" class="border p-2 rounded w-full mb-2"><option value="">Select Student</option>${schoolData.students.map(s=>`<option value="${s.id}">${escapeHtml(s.name)}</option>`)}</select><input type="date" id="attDate" class="border p-2 rounded w-full mb-2"><select id="attStatus" class="border p-2 rounded w-full mb-2"><option>present</option><option>absent</option><option>late</option></select><button id="markAttendanceBtn" class="apply-btn px-4 py-2 rounded">Mark Attendance</button><div id="attHistory" class="mt-4"></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
@@ -662,17 +719,81 @@ async function renderAttendanceAppraisal() {
     const loadAttendanceHistory = async () => {
         const studentId = document.getElementById("attStudentSelect").value;
         if(!studentId) return;
-        const { data } = await supabaseClient.from('attendance').select('*').eq('student_id',studentId).order('date', {ascending:false}).limit(10);
+        const data = await safeDbQuery(supabaseClient.from('attendance').select('*').eq('student_id',studentId).order('date', {ascending:false}).limit(10), "Load attendance history");
         document.getElementById("attHistory").innerHTML = `<h3 class="font-bold">Recent Attendance</h3><ul>${data?.map(a=>`<li>${a.date}: ${a.status}</li>`).join('')||'None'}</ul>`;
     };
     document.getElementById("attStudentSelect").addEventListener("change", loadAttendanceHistory);
 }
 async function renderParentDashboard() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); document.getElementById("mainContent").innerHTML = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👨‍🎓 Parent Dashboard</h2><p>Welcome, parent of ${escapeHtml(student?.name)} (${escapeHtml(student?.reg_number)})</p><div class="grid md:grid-cols-2 gap-4 mt-4"><div class="bg-green-50 p-3 rounded">Fee Status: ${student?.fee_status}</div><div class="bg-blue-50 p-3 rounded">Section: ${student?.section}</div></div></div>`; }
 async function renderFeePayment() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); if(!student) return showToast("Student not linked", true); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">💳 Fee Payment</h2><div class="mt-4"><select id="payTerm"><option value="1">Term 1</option><option value="2">Term 2</option><option value="3">Term 3</option></select><input id="payYear" value="2026" class="border p-2 rounded ml-2"><input id="payAmount" type="number" placeholder="Amount" class="border p-2 rounded ml-2"><select id="payMethod"><option>cash</option><option>bank_transfer</option></select><button id="submitPaymentBtn" class="apply-btn px-4 py-2 rounded ml-2">Submit Payment Request</button><div id="paymentMsg" class="mt-2"></div></div></div>`; document.getElementById("mainContent").innerHTML = html; document.getElementById("submitPaymentBtn").onclick = async () => { const term = document.getElementById("payTerm").value; const year = document.getElementById("payYear").value; const amount = parseFloat(document.getElementById("payAmount").value); const method = document.getElementById("payMethod").value; if(isNaN(amount) || amount<=0) return showToast("Valid amount", true); try { const receipt = await recordPayment(currentUser.studentId, term, year, amount, method, false); showToast(`Payment recorded. Reference: ${receipt}. Awaiting authorization.`); } catch(e) { showToast(e.message, true); } }; }
-async function renderParentResult() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); if(!student) return; const { data: results } = await supabaseClient.from('student_results').select('*').eq('student_id',student.id).order('year', {ascending:false}); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📃 Result for ${escapeHtml(student.name)}</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Year</th><th>Term</th><th>Subject</th><th>CA1</th><th>CA2</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead><tbody>${results?.map(r=>`<tr><td class="p-2">${r.year}</td><td class="p-2">${r.term}</td><td class="p-2">${escapeHtml(r.subject)}</td><td class="p-2">${r.ca1}</td><td class="p-2">${r.ca2}</td><td class="p-2">${r.exam}</td><td class="p-2">${r.total}</td><td class="p-2">${r.grade}</td></tr>`).join('') || '<tr><td colspan="8" class="text-center">No results yet</td></tr>'}</tbody></table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
-async function renderPaymentHistory() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); if(!student) return; const { data: txs } = await supabaseClient.from('fee_transactions').select('*').eq('student_id',student.id).order('payment_date', {ascending:false}); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📓 Payment History & Receipt</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Date</th><th>Term/Year</th><th>Amount</th><th>Receipt No</th><th>Status</th><th>Action</th></tr></thead><tbody>${txs?.map(tx=>`<tr><td class="p-2">${new Date(tx.payment_date).toLocaleDateString()}</td><td class="p-2">${tx.term}/${tx.year}</td><td class="p-2">₦${tx.amount_paid}</td><td class="p-2">${tx.receipt_no}</td><td class="p-2 ${tx.status==='authorized'?'text-green-600':'text-orange-500'}">${tx.status}</td><td class="p-2"><button class="printReceiptBtn text-blue-600" data-id="${tx.id}">Print</button></td></tr>`).join('') || '<tr><td colspan="6" class="text-center">No transactions</td></tr>'}</tbody></table></div></div>`; document.getElementById("mainContent").innerHTML = html; document.querySelectorAll('.printReceiptBtn').forEach(btn => { btn.onclick = async () => { const txId = btn.dataset.id; const { data: tx } = await supabaseClient.from('fee_transactions').select('*').eq('id',txId).single(); const stu = student; const termName = {1:"First",2:"Second",3:"Third"}[tx.term]; const receiptHtml = `<div class="receipt-card"><div class="text-center border-b pb-4"><h2 class="text-xl font-bold">Al‑Istiqaamah Flying Wings Academy</h2><p>Fee Receipt</p></div><div><p><strong>Receipt No:</strong> ${tx.receipt_no}</p><p><strong>Student:</strong> ${escapeHtml(stu.name)} (${escapeHtml(stu.reg_number)})</p><p><strong>Term:</strong> ${termName} ${tx.year}</p><p><strong>Amount:</strong> ₦${tx.amount_paid}</p><p><strong>Status:</strong> ${tx.status}</p></div><div class="text-center mt-4"><button onclick="window.print()" class="apply-btn px-4 py-1 rounded">Print</button></div></div>`; let modal = document.createElement('div'); modal.className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[300]"; modal.innerHTML=`<div class="max-w-md w-full bg-white rounded-xl p-4 relative"><button class="absolute right-2 top-2 text-2xl closeModal">&times;</button>${receiptHtml}</div>`; document.body.appendChild(modal); modal.querySelector('.closeModal').onclick = ()=>modal.remove(); }; }); }
+async function renderParentResult() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); if(!student) return; const results = await safeDbQuery(supabaseClient.from('student_results').select('*').eq('student_id',student.id).order('year', {ascending:false}), "Load results failed"); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📃 Result for ${escapeHtml(student.name)}</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Year</th><th>Term</th><th>Subject</th><th>CA1</th><th>CA2</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead><tbody>${results?.map(r=>`<tr><td class="p-2">${r.year}</td><td class="p-2">${r.term}</td><td class="p-2">${escapeHtml(r.subject)}</td><td class="p-2">${r.ca1}</td><td class="p-2">${r.ca2}</td><td class="p-2">${r.exam}</td><td class="p-2">${r.total}</td><td class="p-2">${r.grade}</td></tr>`).join('') || '<tr><td colspan="8" class="text-center">No results yet</td></tr>'}</tbody> </table></div></div>`; document.getElementById("mainContent").innerHTML = html; }
+async function renderPaymentHistory() { const student = schoolData.students.find(s=>s.id == currentUser.studentId); if(!student) return; const txs = await safeDbQuery(supabaseClient.from('fee_transactions').select('*').eq('student_id',student.id).order('payment_date', {ascending:false}), "Load payment history failed"); let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">📓 Payment History & Receipt</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Date</th><th>Term/Year</th><th>Amount</th><th>Receipt No</th><th>Status</th><th>Action</th></tr></thead><tbody>${txs?.map(tx=>`<tr><td class="p-2">${new Date(tx.payment_date).toLocaleDateString()}</td><td class="p-2">${tx.term}/${tx.year}</td><td class="p-2">₦${tx.amount_paid}</td><td class="p-2">${tx.receipt_no}</td><td class="p-2 ${tx.status==='authorized'?'text-green-600':'text-orange-500'}">${tx.status}</td><td class="p-2"><button class="printReceiptBtn text-blue-600" data-id="${tx.id}">Print</button></td></tr>`).join('') || '<tr><td colspan="6" class="text-center">No transactions</td></tr>'}</tbody> </table></div></div>`; document.getElementById("mainContent").innerHTML = html; document.getElementById("mainContent").addEventListener("click", async (e) => { if (e.target.classList.contains("printReceiptBtn")) { const txId = e.target.dataset.id; const tx = await safeDbQuery(supabaseClient.from('fee_transactions').select('*').eq('id',txId).single(), "Load transaction"); const stu = student; const termName = {1:"First",2:"Second",3:"Third"}[tx.term]; const receiptHtml = `<div class="receipt-card"><div class="text-center border-b pb-4"><h2 class="text-xl font-bold">Al‑Istiqaamah Flying Wings Academy</h2><p>Fee Receipt</p></div><div><p><strong>Receipt No:</strong> ${tx.receipt_no}</p><p><strong>Student:</strong> ${escapeHtml(stu.name)} (${escapeHtml(stu.reg_number)})</p><p><strong>Term:</strong> ${termName} ${tx.year}</p><p><strong>Amount:</strong> ₦${tx.amount_paid}</p><p><strong>Status:</strong> ${tx.status}</p></div><div class="text-center mt-4"><button onclick="window.print()" class="apply-btn px-4 py-1 rounded">Print</button></div></div>`; let modal = document.createElement('div'); modal.className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[300]"; modal.innerHTML=`<div class="max-w-md w-full bg-white rounded-xl p-4 relative"><button class="absolute right-2 top-2 text-2xl closeModal">&times;</button>${receiptHtml}</div>`; document.body.appendChild(modal); modal.querySelector('.closeModal').onclick = ()=>modal.remove(); } }); }
 
-// ========== ENHANCED RESULTS MANAGEMENT WITH FIXED POSITION CALCULATION ==========
+// ========== ENHANCED RESULTS MANAGEMENT WITH OPTIMIZED POSITIONS ==========
+async function computeAllPositions(term, year, section = null) {
+    showLoading();
+    try {
+        let query = supabaseClient
+            .from('student_results')
+            .select(`
+                student_id,
+                total,
+                subject,
+                students!inner (id, name, section)
+            `)
+            .eq('term', term)
+            .eq('year', year);
+        if (section) query = query.eq('students.section', section);
+        const { data: results, error } = await query;
+        if (error) throw error;
+        if (!results.length) { hideLoading(); return; }
+        
+        const studentTotals = new Map();
+        for (const row of results) {
+            const sid = row.student_id;
+            if (!studentTotals.has(sid)) studentTotals.set(sid, { total: 0, subjects: new Map(), name: row.students.name });
+            const entry = studentTotals.get(sid);
+            entry.total += row.total;
+            entry.subjects.set(row.subject, row.total);
+        }
+        const studentsArray = Array.from(studentTotals.entries()).map(([id, data]) => ({ id, ...data }));
+        studentsArray.sort((a,b) => b.total - a.total);
+        let rank = 1;
+        for (let i=0; i<studentsArray.length; i++) {
+            if (i>0 && studentsArray[i].total !== studentsArray[i-1].total) rank = i+1;
+            studentsArray[i].classPosition = rank;
+        }
+        // Compute subject ranks (simple version)
+        const allSubjects = new Set();
+        studentsArray.forEach(s => { s.subjects.forEach((_, sub) => allSubjects.add(sub)); });
+        for (let sub of allSubjects) {
+            let subScores = studentsArray.map(s => ({ id: s.id, score: s.subjects.get(sub) || 0 }));
+            subScores.sort((a,b) => b.score - a.score);
+            let subRank = 1;
+            for (let i=0; i<subScores.length; i++) {
+                if (i>0 && subScores[i].score !== subScores[i-1].score) subRank = i+1;
+                const student = studentsArray.find(s => s.id === subScores[i].id);
+                if (student) {
+                    student.subjectPositions = student.subjectPositions || {};
+                    student.subjectPositions[sub] = subRank;
+                }
+            }
+        }
+        for (const s of studentsArray) {
+            await supabaseClient.from('student_positions').upsert({
+                student_id: s.id, term, year,
+                class_position: s.classPosition,
+                subject_positions: s.subjectPositions || {},
+                total_score: s.total
+            }, { onConflict: 'student_id,term,year' });
+        }
+        hideLoading();
+    } catch (err) {
+        hideLoading();
+        showToast("Position calculation failed: " + err.message, true);
+    }
+}
+
 async function renderResultsManagement() {
     if (!['dg_ceo', 'der', 'headteacher'].includes(currentUser.role)) {
         showToast("Access denied", true);
@@ -716,12 +837,7 @@ async function renderResultsManagement() {
             document.getElementById("positionDisplay").innerHTML = '';
             return;
         }
-        const { data: existingResults } = await supabaseClient
-            .from('student_results')
-            .select('*')
-            .eq('student_id', studentId)
-            .eq('term', term)
-            .eq('year', year);
+        const existingResults = await safeDbQuery(supabaseClient.from('student_results').select('*').eq('student_id', studentId).eq('term', term).eq('year', year), "Load grades");
         let editorHtml = `<div id="subjectsContainer" class="space-y-2">`;
         if (existingResults && existingResults.length) {
             for (let res of existingResults) {
@@ -751,7 +867,7 @@ async function renderResultsManagement() {
         await updatePositionDisplay(studentId, term, year);
         document.getElementById("saveGradesBtn")?.addEventListener("click", async () => {
             await saveAllGrades(studentId, term, year);
-            await computeAllPositions(term, year, sectionFilter || null);
+            await computeAllPositions(term, year, sectionFilter);
             await updatePositionDisplay(studentId, term, year);
             showToast("Grades saved and positions recalculated");
             loadStudentGrades();
@@ -810,79 +926,8 @@ async function renderResultsManagement() {
         if (grades.length) await supabaseClient.from('student_results').insert(grades);
     }
 
-    async function computeAllPositions(term, year, section = null) {
-        showLoading();
-        try {
-            let query = supabaseClient
-                .from('student_results')
-                .select('*')
-                .eq('term', term)
-                .eq('year', year);
-            const { data: results, error: resErr } = await query;
-            if (resErr) throw resErr;
-            if (!results.length) { hideLoading(); return; }
-            const studentIds = [...new Set(results.map(r => r.student_id))];
-            let studentsQuery = supabaseClient
-                .from('students')
-                .select('id, name, section')
-                .in('id', studentIds);
-            if (section) studentsQuery = studentsQuery.eq('section', section);
-            const { data: studentsData, error: stuErr } = await studentsQuery;
-            if (stuErr) throw stuErr;
-            const allResults = results.map(r => ({
-                ...r,
-                students: studentsData.find(s => s.id === r.student_id)
-            })).filter(r => r.students);
-            const studentMap = new Map();
-            for (let res of allResults) {
-                const studentId = res.student_id;
-                if (!studentMap.has(studentId)) {
-                    studentMap.set(studentId, { total: 0, subjects: new Map(), name: res.students.name, section: res.students.section });
-                }
-                const entry = studentMap.get(studentId);
-                entry.total += res.total;
-                entry.subjects.set(res.subject, res.total);
-            }
-            let studentsArray = Array.from(studentMap.entries()).map(([id, data]) => ({ id, ...data }));
-            studentsArray.sort((a, b) => b.total - a.total);
-            let currentPos = 1;
-            for (let i = 0; i < studentsArray.length; i++) {
-                if (i > 0 && studentsArray[i].total === studentsArray[i-1].total) {
-                    studentsArray[i].classPosition = studentsArray[i-1].classPosition;
-                } else {
-                    studentsArray[i].classPosition = currentPos;
-                }
-                currentPos++;
-            }
-            const allSubjects = new Set();
-            studentsArray.forEach(s => { s.subjects.forEach((_, sub) => allSubjects.add(sub)); });
-            for (let sub of allSubjects) {
-                let subScores = studentsArray.map(s => ({ id: s.id, score: s.subjects.get(sub) || 0 }));
-                subScores.sort((a,b) => b.score - a.score);
-                let rank = 1;
-                for (let i = 0; i < subScores.length; i++) {
-                    if (i > 0 && subScores[i].score === subScores[i-1].score) { /* same rank */ }
-                    else rank = i+1;
-                    const student = studentsArray.find(s => s.id === subScores[i].id);
-                    if (student) { student.subjectPositions = student.subjectPositions || {}; student.subjectPositions[sub] = rank; }
-                }
-            }
-            for (let s of studentsArray) {
-                await supabaseClient.from('student_positions').upsert({
-                    student_id: s.id, term, year,
-                    class_position: s.classPosition,
-                    subject_positions: s.subjectPositions,
-                    total_score: s.total
-                }, { onConflict: 'student_id,term,year' });
-            }
-        } catch (err) { 
-            console.error(err);
-            showToast("Error computing positions: " + err.message, true); 
-        } finally { hideLoading(); }
-    }
-
     async function updatePositionDisplay(studentId, term, year) {
-        const { data: posData } = await supabaseClient.from('student_positions').select('*').eq('student_id', studentId).eq('term', term).eq('year', year).single();
+        const posData = await safeDbQuery(supabaseClient.from('student_positions').select('*').eq('student_id', studentId).eq('term', term).eq('year', year).single(), "Load position");
         if (!posData) { document.getElementById("positionDisplay").innerHTML = '<p class="text-gray-500">Positions not yet calculated. Save grades first.</p>'; return; }
         let subjectRanksHtml = '';
         if (posData.subject_positions) {
@@ -946,48 +991,60 @@ function renderContentView(view) {
 
 function showDashboard() {
     try {
-        console.log("showDashboard called, currentUser:", currentUser);
-        const landing = document.getElementById('landingPage');
-        if (landing) landing.style.display = 'none';
-        const loginScreen = document.getElementById('loginScreen');
-        if (loginScreen) loginScreen.style.display = 'none';
-        const parentModal = document.getElementById('parentLoginModal');
-        if (parentModal) parentModal.style.display = 'none';
-        const signupModal = document.getElementById('adminSignupModal');
-        if (signupModal) signupModal.style.display = 'none';
-        
+        document.getElementById('landingPage').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('parentLoginModal').style.display = 'none';
+        document.getElementById('adminSignupModal').style.display = 'none';
         const appContainer = document.getElementById('appContainer');
-        if (!appContainer) throw new Error("appContainer not found");
         appContainer.classList.remove('hidden');
-        
-        const userNameSpan = document.getElementById('topUserName');
-        const userRoleSpan = document.getElementById('topUserRole');
-        if (userNameSpan) userNameSpan.innerText = currentUser.full_name || 'User';
-        if (userRoleSpan) userRoleSpan.innerText = (currentUser.role || 'user').toUpperCase();
-        
+        document.getElementById('topUserName').innerText = currentUser.full_name || 'User';
+        document.getElementById('topUserRole').innerText = (currentUser.role || 'user').toUpperCase();
         const navItems = getNavItemsByRole();
         const navHtml = navItems.map(item => `<a href="#" data-view="${item.id}" class="nav-link flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-white/10"><span class="text-xl">${item.icon}</span><span>${item.label}</span></a>`).join('');
-        const dynamicNav = document.getElementById('dynamicNav');
-        if (!dynamicNav) throw new Error("dynamicNav not found");
-        dynamicNav.innerHTML = navHtml;
-        
+        document.getElementById('dynamicNav').innerHTML = navHtml;
         document.querySelectorAll('.nav-link').forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const view = link.dataset.view;
-                if (view && typeof renderContentView === 'function') {
-                    renderContentView(view);
-                }
+                if (view) renderContentView(view);
                 closeMobileSidebar();
                 resetInactivityTimer();
             });
         });
-        
-        if (navItems.length > 0 && typeof renderContentView === 'function') {
-            renderContentView(navItems[0].id);
-        } else {
-            document.getElementById('mainContent').innerHTML = '<div class="bg-white p-8 rounded-2xl shadow"><h2 class="text-3xl font-bold text-emerald-800">Dashboard</h2><p>No navigation items found.</p></div>';
-        }
+        if (navItems.length > 0) renderContentView(navItems[0].id);
+        else document.getElementById('mainContent').innerHTML = '<div class="bg-white p-8 rounded-2xl shadow"><h2 class="text-3xl font-bold text-emerald-800">Dashboard</h2><p>No navigation items found.</p></div>';
+        // Event delegation for student list actions (Toggle/Delete)
+        document.getElementById("mainContent").addEventListener("click", async (e) => {
+            if (e.target.classList.contains("suspend-btn")) {
+                const studentId = e.target.dataset.id;
+                const curStatus = e.target.dataset.status;
+                const newStatus = curStatus === 'active' ? 'suspended' : 'active';
+                await updateStudentStatus(studentId, newStatus);
+                // Update UI without full re-render
+                const row = e.target.closest("tr");
+                if (row) {
+                    const statusSpan = row.querySelector(".status-badge");
+                    if (statusSpan) {
+                        statusSpan.innerText = newStatus;
+                        statusSpan.className = `status-badge ${newStatus === 'active' ? 'active-badge' : 'suspended-badge'}`;
+                    }
+                    e.target.dataset.status = newStatus;
+                }
+                showToast(`Student ${newStatus}`);
+            } else if (e.target.classList.contains("delete-btn")) {
+                const studentId = e.target.dataset.id;
+                if(confirm("Delete student & ALL related records?")){
+                    await supabaseClient.from('fee_transactions').delete().eq('student_id',studentId);
+                    await supabaseClient.from('fee_balances').delete().eq('student_id',studentId);
+                    await supabaseClient.from('student_results').delete().eq('student_id',studentId);
+                    await supabaseClient.from('student_positions').delete().eq('student_id',studentId);
+                    await supabaseClient.from('students').delete().eq('id',studentId);
+                    await deleteStudentFromCache(studentId);
+                    renderStudentsList(); // re-render because the row is gone
+                    showToast("Deleted");
+                }
+            }
+        });
     } catch (err) {
         console.error("showDashboard error:", err);
         alert("Failed to load dashboard: " + err.message);
@@ -1001,7 +1058,7 @@ async function init() {
     await loadSlides();
     initCookieConsent();
     
-    // Login modal handlers (fixed)
+    // Login modal handlers
     document.getElementById('loginBtnHero').onclick = () => {
         document.getElementById('landingPage').style.display = 'none';
         const modal = document.getElementById('loginScreen');
@@ -1114,7 +1171,7 @@ function closeMobileSidebar() {
     document.getElementById('sidebarOverlay')?.classList.remove('active'); 
 }
 async function fetchAndDisplayAnnouncement() {
-    const { data } = await supabaseClient.from('site_announcement').select('content').eq('id',1).single();
+    const data = await safeDbQuery(supabaseClient.from('site_announcement').select('content').eq('id',1).single(), "Load announcement");
     if(data && document.getElementById('announcementBarWrapper')) document.getElementById('announcementBarWrapper').innerHTML = `<div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-xl">📢 ${escapeHtml(data.content)}</div>`;
 }
 function initCookieConsent() {
@@ -1127,4 +1184,4 @@ function initCookieConsent() {
 init();
 </script>
 </body>
-    </html>
+                                                                                                                                                                                                                                 </html>
