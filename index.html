@@ -101,31 +101,18 @@
 </div>
 
 <!-- MODALS -->
-<div id="loginScreen" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70">
-    <div class="bg-white rounded-2xl p-8 w-96 relative">
-        <button id="closeLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button>
-        <h2 class="text-2xl font-bold mb-4">Login</h2>
-        <div class="flex border-b mb-4">
-            <button id="adminLoginTab" class="flex-1 py-2 text-center border-b-2 border-amber-600 font-semibold">Admin</button>
-            <button id="staffLoginTab" class="flex-1 py-2 text-center text-gray-500">Staff</button>
-        </div>
-        <input type="hidden" id="loginType" value="admin">
-        <form id="authForm">
-            <input id="loginUsername" placeholder="Email (Admin)" class="w-full border p-2 rounded mb-3">
-            <input id="loginPassword" type="password" placeholder="Password" class="w-full border p-2 rounded mb-4">
-            <button class="w-full bg-amber-600 text-white py-2 rounded-lg">Login</button>
-        </form>
-        <div id="adminForgot" class="text-right text-sm mt-2">
-            <a href="#" id="forgotPasswordBtn" class="text-amber-600">Forgot password?</a>
-        </div>
-        <div id="staffForgot" class="hidden text-right text-sm mt-2">
-            <span class="text-gray-500">Contact admin to reset staff password</span>
-        </div>
-    </div>
-</div>
+  <!-- MODALS -->
+    <div id="loginScreen" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96 relative"><h2 class="text-2xl font-bold mb-4">Login</h2><div class="flex gap-4 mb-4 border-b pb-2"><button id="adminLoginTab" class="font-semibold text-amber-600 border-b-2 border-amber-600">Admin</button><button id="staffLoginTab" class="font-semibold text-gray-500">Staff</button></div><form id="authForm"><input type="text" id="loginUsername" placeholder="Email (Admin)" class="w-full border p-2 rounded mb-3"><input type="password" id="loginPassword" placeholder="Password" class="w-full border p-2 rounded mb-4"><input type="hidden" id="loginType" value="admin"><button type="submit" class="w-full bg-amber-600 text-white py-2 rounded-lg">Login</button><div id="adminForgot" class="text-right mt-2"><button type="button" onclick="window.resetPasswordAction()" class="text-xs text-amber-600">Forgot Password?</button></div><div id="staffForgot" class="text-right mt-2 hidden"><p class="text-xs text-gray-400">Contact DG/CEO</p></div></form><button id="closeLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
+    <div id="parentLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96 relative"><h2 class="text-2xl font-bold mb-4">Parent Login</h2><form id="parentAuthForm"><input type="text" id="parentRegNo" placeholder="Student Registration Number" class="w-full border p-2 rounded mb-3"><input type="password" id="parentPassword" value="al123" class="w-full border p-2 rounded mb-4"><button type="submit" class="w-full bg-emerald-600 text-white py-2 rounded-lg">Access Dashboard</button></form><button id="closeParentLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
+    <div id="adminSignupModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96 relative"><h2 class="text-2xl font-bold mb-4">Admin Signup</h2><form id="adminSignupForm"><input type="text" id="adminFullName" placeholder="Full Name" class="w-full border p-2 rounded mb-2"><input type="email" id="adminEmail" placeholder="Email" class="w-full border p-2 rounded mb-2"><input type="password" id="adminPassword" placeholder="Password" class="w-full border p-2 rounded mb-2"><select id="adminRole"><option value="dg_ceo">DG/CEO</option><option value="umc">UMC</option><option value="daf">DAF</option><option value="do">DO</option><option value="der">DER</option><option value="dprpa">DPRPA</option></select><input type="text" id="adminRegCode" placeholder="Registration Code (ALIFLY2026)" class="w-full border p-2 rounded mt-2"><button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg mt-3">Create Account</button></form><button id="closeAdminSignupBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
 
-<div id="parentLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96"><h2 class="text-2xl font-bold">Parent Login</h2><form id="parentAuthForm"><input id="parentRegNo" placeholder="Student Registration Number" class="w-full border p-2 rounded mb-3"><input id="parentPassword" type="password" value="al123" class="w-full border p-2 rounded mb-4"><button class="w-full bg-emerald-600 text-white py-2 rounded-lg">Access Dashboard</button></form><button id="closeParentLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
-<div id="adminSignupModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96"><h2 class="text-2xl font-bold">Admin Signup</h2><form id="adminSignupForm"><input id="adminFullName" placeholder="Full Name" class="w-full border p-2 rounded mb-2"><input id="adminEmail" type="email" placeholder="Email" class="w-full border p-2 rounded mb-2"><input id="adminPassword" type="password" placeholder="Password" class="w-full border p-2 rounded mb-2"><select id="adminRole" class="w-full border p-2 rounded mb-2"><option value="dg_ceo">DG/CEO</option><option value="umc">UMC</option><option value="daf">DAF</option><option value="do">DO</option><option value="der">DER</option></select><input id="adminRegCode" placeholder="Registration Code: ALIFLY2026" class="w-full border p-2 rounded"><button class="w-full bg-indigo-600 text-white py-2 rounded-lg mt-3">Create Account</button></form><button id="closeAdminSignupBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
+    <div id="appContainer" class="hidden flex h-screen w-full fixed inset-0 z-40 bg-white flex-col">
+        <div class="top-bar"><div class="flex items-center gap-3"><button id="mobileMenuToggle" class="text-gray-700 text-2xl md:hidden"><i class="fas fa-bars"></i></button><img src="logo.jpg" class="h-10 w-auto" onerror="this.src='https://placehold.co/100x40';"><span class="font-semibold hidden sm:inline">Al‑Istiqaamah Flying Wings</span></div><div class="flex items-center gap-4"><div class="user-info"><i class="fas fa-user-circle text-xl"></i><div><p class="text-xs text-gray-500">Logged in as</p><p class="text-sm font-bold"><span id="topUserName"></span> (<span id="topUserRole"></span>)</p></div></div><button id="topLogoutBtn" class="logout-top-btn"><i class="fas fa-sign-out-alt mr-1"></i> Logout</button></div></div>
+        <div class="flex flex-1 overflow-hidden relative"><div id="sidebarOverlay" class="sidebar-overlay"></div><aside id="dynamicSidebar" class="sidebar text-white w-80 flex flex-col overflow-y-auto"><div class="p-4 border-b flex justify-between items-center"><p><i class="fas fa-school"></i> Navigation</p><button id="closeMobileSidebar" class="text-white md:hidden"><i class="fas fa-times"></i></button></div><nav id="dynamicNav" class="flex-1 px-3 mt-4 space-y-1"></nav></aside><main class="flex-1 overflow-auto bg-gray-100 p-6" id="mainContent"></main></div>
+    </div>
+    <div id="toastMsg" class="toast-notify"></div>
+
+
 
 <!-- MAIN DASHBOARD CONTAINER -->
 <div id="appContainer" class="hidden flex h-screen flex-col fixed inset-0 z-40 bg-white">
