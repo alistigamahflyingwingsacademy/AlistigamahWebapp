@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        /* Base styles (same as original, with spinner additions) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
         * { font-family: 'Inter', sans-serif; }
         .hero-pattern { background: linear-gradient(135deg, #0a2e2c 0%, #0f3b38 100%); }
@@ -102,7 +101,30 @@
 </div>
 
 <!-- MODALS -->
-<div id="loginScreen" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96 relative"><h2 class="text-2xl font-bold">Login</h2><form id="authForm"><input id="loginUsername" placeholder="Email (Admin) or Username (Staff)" class="w-full border p-2 rounded mb-3"><input id="loginPassword" type="password" placeholder="Password" class="w-full border p-2 rounded mb-4"><button class="w-full bg-amber-600 text-white py-2 rounded-lg">Login</button></form><button id="closeLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
+<!-- LOGIN MODAL (FIXED) -->
+<div id="loginScreen" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70">
+    <div class="bg-white rounded-2xl p-8 w-96 relative">
+        <button id="closeLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button>
+        <h2 class="text-2xl font-bold mb-4">Login</h2>
+        <div class="flex border-b mb-4">
+            <button id="adminLoginTab" class="flex-1 py-2 text-center border-b-2 border-amber-600 font-semibold">Admin</button>
+            <button id="staffLoginTab" class="flex-1 py-2 text-center text-gray-500">Staff</button>
+        </div>
+        <input type="hidden" id="loginType" value="admin">
+        <form id="authForm">
+            <input id="loginUsername" placeholder="Email (Admin)" class="w-full border p-2 rounded mb-3">
+            <input id="loginPassword" type="password" placeholder="Password" class="w-full border p-2 rounded mb-4">
+            <button class="w-full bg-amber-600 text-white py-2 rounded-lg">Login</button>
+        </form>
+        <div id="adminForgot" class="text-right text-sm mt-2">
+            <a href="#" id="forgotPasswordBtn" class="text-amber-600">Forgot password?</a>
+        </div>
+        <div id="staffForgot" class="hidden text-right text-sm mt-2">
+            <span class="text-gray-500">Contact admin to reset staff password</span>
+        </div>
+    </div>
+</div>
+
 <div id="parentLoginModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96"><h2 class="text-2xl font-bold">Parent Login</h2><form id="parentAuthForm"><input id="parentRegNo" placeholder="Student Registration Number" class="w-full border p-2 rounded mb-3"><input id="parentPassword" type="password" value="al123" class="w-full border p-2 rounded mb-4"><button class="w-full bg-emerald-600 text-white py-2 rounded-lg">Access Dashboard</button></form><button id="closeParentLoginBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
 <div id="adminSignupModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70"><div class="bg-white rounded-2xl p-8 w-96"><h2 class="text-2xl font-bold">Admin Signup</h2><form id="adminSignupForm"><input id="adminFullName" placeholder="Full Name" class="w-full border p-2 rounded mb-2"><input id="adminEmail" type="email" placeholder="Email" class="w-full border p-2 rounded mb-2"><input id="adminPassword" type="password" placeholder="Password" class="w-full border p-2 rounded mb-2"><select id="adminRole" class="w-full border p-2 rounded mb-2"><option value="dg_ceo">DG/CEO</option><option value="umc">UMC</option><option value="daf">DAF</option><option value="do">DO</option><option value="der">DER</option></select><input id="adminRegCode" placeholder="Registration Code: ALIFLY2026" class="w-full border p-2 rounded"><button class="w-full bg-indigo-600 text-white py-2 rounded-lg mt-3">Create Account</button></form><button id="closeAdminSignupBtn" class="absolute top-3 right-4 text-2xl">&times;</button></div></div>
 
@@ -409,7 +431,7 @@ function getNavItemsByRole() {
     }
 }
 
-// ========== RENDER FUNCTIONS (only new/enhanced ones shown, others unchanged but XSS-protected) ==========
+// ========== RENDER FUNCTIONS (all original, only essential fixes) ==========
 // Students list (with XSS protection)
 async function renderStudentsList() {
     let html = `<div class="bg-white p-5 rounded-xl shadow"><h2 class="text-2xl font-bold mb-3">📚 Student Registry</h2><div class="flex gap-3 mb-4"><select id="sectionFilter" class="border p-2 rounded"><option>All Sections</option>${SECTIONS.map(s=>`<option>${escapeHtml(s)}</option>`)}</select><input id="searchStudent" placeholder="Search name/reg" class="border p-2 rounded"></div><div class="overflow-x-auto"><table class="w-full border"><thead class="bg-gray-100"><tr><th>Reg No</th><th>Name</th><th>Parent</th><th>Section</th><th>Fee Status</th>${(currentUser.role==='dg_ceo'||currentUser.role==='umc'||currentUser.role==='daf'||currentUser.role==='do')?'<th>Actions</th>':''}</tr></thead><tbody id="stuTbody"></tbody></table></div></div>`;
@@ -538,7 +560,7 @@ async function renderStaffManagement() {
 async function renderApplicationsList() {
     if(!['dg_ceo','umc'].includes(currentUser.role)) return;
     const { data } = await supabaseClient.from('admission_applications').select('*');
-    let html = `<div class="bg-white p-5 rounded-xl"><h2 class="text-2xl font-bold">📋 Applications</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Name</th><th>Email</th><th>Status</th><th>Action</th></tr></thead><tbody>${data.map(app=>`<tr><td class="p-2">${escapeHtml(app.full_name)}</td><td>${escapeHtml(app.parent_email)}</td><td class="p-2"><span class="status-badge status-${app.status}">${app.status}</span></td><td class="p-2"><button onclick="window.viewAppDetails('${app.id}')" class="bg-blue-600 text-white p-1 rounded text-xs">Details</button></td></tr>`).join('')}</tbody></table></div></div>`;
+    let html = `<div class="bg-white p-5 rounded-xl"><h2 class="text-2xl font-bold">📋 Applications</h2><div class="overflow-x-auto"><table class="min-w-full border"><thead class="bg-gray-100"><tr><th>Name</th><th>Email</th><th>Status</th><th>Action</th></tr></thead><tbody>${data.map(app=>`<tr><td class="p-2">${escapeHtml(app.full_name)}</td><td class="p-2">${escapeHtml(app.parent_email)}</td><td class="p-2"><span class="status-badge status-${app.status}">${app.status}</span></td><td class="p-2"><button onclick="window.viewAppDetails('${app.id}')" class="bg-blue-600 text-white p-1 rounded text-xs">Details</button></td></tr>`).join('')}</tbody></table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
     window.viewAppDetails = async (id) => { const {data:app} = await supabaseClient.from('admission_applications').select('*').eq('id',id).single(); alert(JSON.stringify(app.form_data,null,2)); };
 }
@@ -606,7 +628,7 @@ async function renderReceiptGenerator() {
 async function renderPayroll() {
     const { data: teachers } = await supabaseClient.from('teachers').select('name, salary, role');
     let total = teachers?.reduce((s,t)=>s+(t.salary||0),0)||0;
-    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👥 Payroll Summary</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Name</th><th>Role</th><th>Salary (₦)</th></tr></thead><tbody>${teachers?.map(t=>`<tr><td class="p-2">${escapeHtml(t.name)}</td><td>${escapeHtml(t.role)}</td><td>₦${(t.salary||0).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="3">No staff data</td></tr>'}</tbody><tfoot><tr class="bg-gray-100"><td colspan="2" class="font-bold">Total Monthly</td><td class="font-bold">₦${total.toLocaleString()}</td></tr></tfoot></table></div></div>`;
+    let html = `<div class="bg-white p-6 rounded-xl"><h2 class="text-2xl font-bold">👥 Payroll Summary</h2><div class="overflow-x-auto"><table class="w-full border"><thead><tr><th>Name</th><th>Role</th><th>Salary (₦)</th></tr></thead><tbody>${teachers?.map(t=>`<tr><td class="p-2">${escapeHtml(t.name)}</td><td class="p-2">${escapeHtml(t.role)}</td><td class="p-2">₦${(t.salary||0).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="3">No staff data</td></tr>'}</tbody><tfoot><tr class="bg-gray-100"><td colspan="2" class="font-bold">Total Monthly</td><td class="font-bold">₦${total.toLocaleString()}</td></tr></tfoot></table></div></div>`;
     document.getElementById("mainContent").innerHTML = html;
 }
 // Payment Report
@@ -965,6 +987,7 @@ async function handleAdminSignup(e) {
         document.getElementById('adminSignupModal').style.display = 'none';
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('loginUsername').value = email;
+        // set active tab to admin
         document.getElementById('adminLoginTab').click();
     } catch(err) { showToast(err.message, true); }
 }
@@ -976,25 +999,45 @@ async function init() {
     await refreshSchoolData();
     await loadSlides();
     initCookieConsent();
-    // Event listeners for landing/modals (same as original)
-    document.getElementById('adminLoginTab').onclick = () => {
-        document.getElementById('loginType').value = 'admin';
-        document.getElementById('loginUsername').placeholder = 'Email (Admin)';
-        document.getElementById('adminForgot').classList.remove('hidden');
-        document.getElementById('staffForgot').classList.add('hidden');
-        document.getElementById('adminLoginTab').classList.add('border-b-2','border-amber-600','font-semibold');
-        document.getElementById('staffLoginTab').classList.remove('border-b-2','border-amber-600','font-semibold');
-        document.getElementById('staffLoginTab').classList.add('text-gray-500');
+    
+    // Login modal tabs logic
+    const adminTab = document.getElementById('adminLoginTab');
+    const staffTab = document.getElementById('staffLoginTab');
+    const loginType = document.getElementById('loginType');
+    const loginUsername = document.getElementById('loginUsername');
+    const adminForgot = document.getElementById('adminForgot');
+    const staffForgot = document.getElementById('staffForgot');
+    const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+    
+    adminTab.onclick = () => {
+        loginType.value = 'admin';
+        loginUsername.placeholder = 'Email (Admin)';
+        adminForgot.classList.remove('hidden');
+        staffForgot.classList.add('hidden');
+        adminTab.classList.add('border-b-2', 'border-amber-600', 'font-semibold');
+        staffTab.classList.remove('border-b-2', 'border-amber-600', 'font-semibold');
+        staffTab.classList.add('text-gray-500');
+        adminTab.classList.remove('text-gray-500');
     };
-    document.getElementById('staffLoginTab').onclick = () => {
-        document.getElementById('loginType').value = 'staff';
-        document.getElementById('loginUsername').placeholder = 'Username (Staff)';
-        document.getElementById('adminForgot').classList.add('hidden');
-        document.getElementById('staffForgot').classList.remove('hidden');
-        document.getElementById('staffLoginTab').classList.add('border-b-2','border-amber-600','font-semibold');
-        document.getElementById('adminLoginTab').classList.remove('border-b-2','border-amber-600','font-semibold');
-        document.getElementById('adminLoginTab').classList.add('text-gray-500');
+    staffTab.onclick = () => {
+        loginType.value = 'staff';
+        loginUsername.placeholder = 'Username (Staff)';
+        adminForgot.classList.add('hidden');
+        staffForgot.classList.remove('hidden');
+        staffTab.classList.add('border-b-2', 'border-amber-600', 'font-semibold');
+        adminTab.classList.remove('border-b-2', 'border-amber-600', 'font-semibold');
+        adminTab.classList.add('text-gray-500');
+        staffTab.classList.remove('text-gray-500');
     };
+    
+    forgotPasswordBtn.onclick = async (e) => {
+        e.preventDefault();
+        let email = document.getElementById('loginUsername').value;
+        if(!email) return showToast("Enter email", true);
+        await supabaseClient.auth.resetPasswordForEmail(email);
+        showToast("Reset link sent");
+    };
+    
     document.getElementById('loginBtnHero').onclick = () => { document.getElementById('landingPage').style.display = 'none'; document.getElementById('loginScreen').style.display = 'flex'; };
     document.getElementById('parentLoginBtn').onclick = () => { document.getElementById('landingPage').style.display = 'none'; document.getElementById('parentLoginModal').style.display = 'flex'; };
     document.getElementById('adminSignupBtn').onclick = () => { document.getElementById('landingPage').style.display = 'none'; document.getElementById('adminSignupModal').style.display = 'flex'; };
@@ -1002,10 +1045,18 @@ async function init() {
     document.getElementById('closeParentLoginBtn').onclick = () => location.reload(); 
     document.getElementById('closeAdminSignupBtn').onclick = () => location.reload();
     document.getElementById('applyNowBtnFooter').onclick = () => window.showApplicationFormModal();
-    document.getElementById('authForm').addEventListener('submit', async(e) => { e.preventDefault(); let type = document.getElementById('loginType').value; let user = document.getElementById('loginUsername').value; let pwd = document.getElementById('loginPassword').value; try { if(type === 'admin') await loginAdmin(user, pwd); else await loginStaff(user, pwd); } catch(err) { showToast(err.message, true); } });
+    document.getElementById('authForm').addEventListener('submit', async(e) => { 
+        e.preventDefault(); 
+        let type = document.getElementById('loginType').value; 
+        let user = document.getElementById('loginUsername').value; 
+        let pwd = document.getElementById('loginPassword').value; 
+        try { 
+            if(type === 'admin') await loginAdmin(user, pwd); 
+            else await loginStaff(user, pwd); 
+        } catch(err) { showToast(err.message, true); } 
+    });
     document.getElementById('parentAuthForm').addEventListener('submit', async(e) => { e.preventDefault(); await parentLogin(document.getElementById('parentRegNo').value, document.getElementById('parentPassword').value); });
     document.getElementById('adminSignupForm').addEventListener('submit', handleAdminSignup);
-    document.getElementById('forgotPasswordBtn').onclick = async() => { let email = document.getElementById('loginUsername').value; if(!email) return showToast("Enter email", true); await supabaseClient.auth.resetPasswordForEmail(email); showToast("Reset link sent"); };
     document.getElementById('topLogoutBtn').onclick = logoutUser;
     document.getElementById('mobileMenuToggle').onclick = () => { document.getElementById('dynamicSidebar').classList.add('open'); document.getElementById('sidebarOverlay').classList.add('active'); };
     document.getElementById('closeMobileSidebar').onclick = closeMobileSidebar;
@@ -1020,4 +1071,4 @@ async function init() {
 init();
 </script>
 </body>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   </html>
+    </html>
