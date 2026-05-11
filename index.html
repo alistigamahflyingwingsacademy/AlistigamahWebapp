@@ -1034,8 +1034,194 @@ async function staffPerformanceAnalysisView() {
     renderTable();
 }
 async function academicPerformanceView() { document.getElementById('mainContent').innerHTML = `<div class="bg-white p-5"><canvas id="perfChart" height="200"></canvas></div>`; setTimeout(()=>{ new Chart(document.getElementById('perfChart'),{ type:'bar', data:{ labels:CLASSES, datasets:[{ label:'Average Score', data:CLASSES.map(ac=>{ let avg = schoolData.results.filter(r=>schoolData.students.find(s=>s.id===r.student_id)?.academic_class===ac).reduce((a,b)=>a+(b.ca1+b.ca2+b.exam),0)/Math.max(1, schoolData.results.filter(r=>schoolData.students.find(s=>s.id===r.student_id)?.academic_class===ac).length); return avg||0; }), backgroundColor:'#f59e0b' }] } }); },100); }
-async function sectionAnalysisView() { let html = `<div class="bg-white p-5"><h2>Section Analysis</h2><select id="secAna" class="border p-2 w-full">${SECTIONS.map(s=>`<option>${s}</option>`)}</select><div id="secStats"></div></div>`; document.getElementById('mainContent').innerHTML = html; document.getElementById('secAna').onchange = () => { let sec = document.getElementById('secAna').value; let students = schoolData.students.filter(s=>s.section===sec); let paid = students.filter(s=>s.fee_status==='Paid').length; document.getElementById('secStats').innerHTML = `<p>Students: ${students.length} | Fees Paid: ${paid} | Pending: ${students.length-paid}</p>`; }; document.getElementById('secAna').dispatchEvent(new Event('change')); }
 async function gradeStudentView() { teacherResultEntry(); }
+async function sectionAnalysisView() {
+    const sections = ["regular islamiyyah","regular memorization","intensive memorization","integrated islamic basic section","advance section","woman section"];
+    const currentYear = new Date().getFullYear();
+    
+    let html = `
+        <div class="card p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">📊 Section‑wise Academic Analysis</h2>
+                <button id="refreshSectionAnalysis" class="apply-btn px-4 py-2 rounded-full"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="filter-row">
+                <label>Term:</label>
+                <select id="sectionAnalysisTerm" class="border rounded-xl p-2">
+                    <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+                </select>
+                <label>Year:</label>
+                <input type="number" id="sectionAnalysisYear" value="${currentYear}" class="border rounded-xl p-2 w-28">
+                <label>Subject (optional):</label>
+                <select id="sectionAnalysisSubject" class="border rounded-xl p-2">
+                    <option value="all">All Subjects</option>
+                    ${[...new Set(schoolData.results.map(r => r.subject))].map(s => `<option>${s}</option>`).join('')}
+                </select>
+            </div>
+            
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- Table: Section Performance Summary -->
+                <div class="border rounded-2xl p-4 bg-white">
+                    <h3 class="text-lg font-bold mb-3">📋 Performance Summary by Section</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-100">
+                                <tr><th>Section</th><th>Students</th><th>Avg Score (%)</th><th>Pass Rate (%)</th><th>Top Subject</th></tr>
+                            </thead>
+                            <tbody id="sectionSummaryBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Chart: Average Scores per Section -->
+                <div class="border rounded-2xl p-4 bg-white">
+                    <h3 class="text-lg font-bold mb-3">📈 Average Score by Section</h3>
+                    <canvas id="sectionAvgChart" class="max-h-64"></canvas>
+                </div>
+            </div>
+            
+            <!-- Detailed Table: Subject‑wise performance per section -->
+            <div class="mt-6 border rounded-2xl p-4 bg-white">
+                <h3 class="text-lg font-bold mb-3">🔍 Subject‑wise Breakdown (hover for details)</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-100">
+                            <tr><th>Section</th><th>Subject</th><th>Average Score</th><th>Highest Score</th><th>Lowest Score</th></tr>
+                        </thead>
+                        <tbody id="sectionSubjectDetailBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('mainContent').innerHTML = html;
+    
+    async function loadAnalysis() {
+        const term = document.getElementById('sectionAnalysisTerm').value;
+        const year = parseInt(document.getElementById('sectionAnalysisYear').value);
+        const selectedSubject = document.getElementById('sectionAnalysisSubject').value;
+        
+        // 1. Summary per section
+        const summaryRows = [];
+        const sectionAvgScores = [];
+        
+        for (const section of sections) {
+            const studentsInSection = schoolData.students.filter(s => s.section === section);
+            const studentIds = studentsInSection.map(s => s.id);
+            
+            // Get all results for these students in the given term/year
+            let results = schoolData.results.filter(r => studentIds.includes(r.student_id) && r.term === term && r.year === year);
+            if (selectedSubject !== 'all') {
+                results = results.filter(r => r.subject === selectedSubject);
+            }
+            
+            // Compute average score per student (across subjects) then average across students
+            const studentAverages = [];
+            for (const sid of studentIds) {
+                const studentResults = results.filter(r => r.student_id === sid);
+                const total = studentResults.reduce((sum, r) => sum + (r.total || 0), 0);
+                const avg = studentResults.length ? total / studentResults.length : 0;
+                studentAverages.push(avg);
+            }
+            const avgScore = studentAverages.length ? studentAverages.reduce((a,b)=>a+b,0)/studentAverages.length : 0;
+            const passCount = studentAverages.filter(score => score >= 50).length;
+            const passRate = studentAverages.length ? (passCount / studentAverages.length) * 100 : 0;
+            
+            // Find top subject for this section (most frequent highest average)
+            let subjectScores = {};
+            for (const r of results) {
+                if (!subjectScores[r.subject]) subjectScores[r.subject] = { total: 0, count: 0 };
+                subjectScores[r.subject].total += r.total;
+                subjectScores[r.subject].count += 1;
+            }
+            let topSubject = "—";
+            let bestAvg = 0;
+            for (const [sub, data] of Object.entries(subjectScores)) {
+                const avgSub = data.total / data.count;
+                if (avgSub > bestAvg) {
+                    bestAvg = avgSub;
+                    topSubject = sub;
+                }
+            }
+            
+            summaryRows.push({ section, studentCount: studentIds.length, avgScore, passRate, topSubject });
+            sectionAvgScores.push(avgScore);
+        }
+        
+        // Render summary table
+        const summaryBody = document.getElementById('sectionSummaryBody');
+        summaryBody.innerHTML = summaryRows.map(row => `
+            <tr>
+                <td class="font-medium">${row.section}</td>
+                <td>${row.studentCount}</td>
+                <td><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="bg-emerald-600 h-2.5 rounded-full" style="width: ${row.avgScore}%"></div></div>${row.avgScore.toFixed(1)}%</td>
+                <td>${row.passRate.toFixed(1)}%</td>
+                <td>${escapeHtml(row.topSubject)}</td>
+            </tr>
+        `).join('');
+        
+        // Render chart (bar)
+        if (window.sectionAvgChart) window.sectionAvgChart.destroy();
+        window.sectionAvgChart = new Chart(document.getElementById('sectionAvgChart'), {
+            type: 'bar',
+            data: {
+                labels: sections,
+                datasets: [{
+                    label: 'Average Score (%)',
+                    data: sectionAvgScores,
+                    backgroundColor: 'rgba(245, 158, 11, 0.7)',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Score %' } } },
+                plugins: { tooltip: { callbacks: { label: (ctx) => `${ctx.raw.toFixed(1)}%` } } }
+            }
+        });
+        
+        // 2. Detailed subject‑wise breakdown
+        const detailRows = [];
+        for (const section of sections) {
+            const studentIds = schoolData.students.filter(s => s.section === section).map(s => s.id);
+            let results = schoolData.results.filter(r => studentIds.includes(r.student_id) && r.term === term && r.year === year);
+            if (selectedSubject !== 'all') {
+                results = results.filter(r => r.subject === selectedSubject);
+            }
+            // Group by subject
+            const subjectGroups = new Map();
+            for (const r of results) {
+                if (!subjectGroups.has(r.subject)) subjectGroups.set(r.subject, []);
+                subjectGroups.get(r.subject).push(r.total);
+            }
+            for (const [subject, scores] of subjectGroups.entries()) {
+                const avg = scores.reduce((a,b)=>a+b,0) / scores.length;
+                const maxScore = Math.max(...scores);
+                const minScore = Math.min(...scores);
+                detailRows.push({ section, subject, avg, max: maxScore, min: minScore });
+            }
+        }
+        const detailBody = document.getElementById('sectionSubjectDetailBody');
+        detailBody.innerHTML = detailRows.map(row => `
+            <tr>
+                <td class="font-medium">${row.section}</td>
+                <td>${escapeHtml(row.subject)}</td>
+                <td><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="bg-blue-500 h-2.5 rounded-full" style="width: ${row.avg}%"></div></div>${row.avg.toFixed(1)}%</td>
+                <td>${row.max.toFixed(0)}</td>
+                <td>${row.min.toFixed(0)}</td>
+            </tr>
+        `).join('');
+    }
+    
+    document.getElementById('refreshSectionAnalysis').addEventListener('click', async () => {
+        await refreshData();
+        loadAnalysis();
+        showToast("Analysis refreshed");
+    });
+    document.getElementById('sectionAnalysisTerm').addEventListener('change', loadAnalysis);
+    document.getElementById('sectionAnalysisYear').addEventListener('change', loadAnalysis);
+    document.getElementById('sectionAnalysisSubject').addEventListener('change', loadAnalysis);
+    loadAnalysis();
+}
 
 // ========== ROLE MENUS & VIEW MAP ==========
 const roleMenus = {
