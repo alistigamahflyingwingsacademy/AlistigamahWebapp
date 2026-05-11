@@ -926,12 +926,115 @@ async function parentPaymentPortalView() {
 async function parentResultView() { enhancedResultView(false); }
 async function parentPaymentHistoryView() { let payments = schoolData.payments.filter(p=>p.student_id === currentUser.studentId); let html = `<div class="card p-6"><h2>Payment History</h2><ul>${payments.map(p=>`<li>₦${p.amount} - ${p.term} ${p.year} - ${p.payment_method}</li>`).join('')}</ul></div>`; document.getElementById('mainContent').innerHTML = html; }
 async function myClassView() { let teacherClass = currentUser.assigned_class || (schoolData.teachers.find(t=>t.id===currentUser.id)?.assigned_class) || CLASSES[0]; let students = schoolData.students.filter(s => s.academic_class === teacherClass); let html = `<div class="bg-white p-5 rounded-xl"><h2>My Academic Class: ${teacherClass}</h2><button id="writeAppraisalBtn" class="apply-btn mt-2 mb-4 px-4 py-2">Write Appraisal</button><div id="appraisalList"></div><ul>${students.map(s=>`<li>${s.name} (${s.reg_number}) - Section: ${s.section}</li>`).join('')}</ul></div>`; document.getElementById('mainContent').innerHTML = html; let appraisals = schoolData.studentAppraisals.filter(a => students.some(s => s.id === a.student_id)); document.getElementById('appraisalList').innerHTML = `<h3>Recent Appraisals</h3>${appraisals.map(a=>{ let s = students.find(st=>st.id===a.student_id); return `<div class="appraisal-card p-3 my-2"><p><strong>${s?.name}</strong> rated ${a.rating}/5</p><p>${escapeHtml(a.comment)}</p><small>${new Date(a.created_at).toLocaleDateString()}</small></div>`;}).join('') || '<p>None</p>'}`; document.getElementById('writeAppraisalBtn').onclick = () => { let sid = prompt("Student ID:"); let comment = prompt("Comment:"); let rating = prompt("Rating 1-5:"); if(sid && comment && rating) saveAppraisal(sid, comment, parseInt(rating)).then(async()=>{ await refreshData(); myClassView(); }); }; }
-async function attendanceView() { showToast("Attendance module - in development", false); }
+async function attendanceView() {
+    let teacherClass = currentUser.assigned_class || CLASSES[0];
+    let students = schoolData.students.filter(s=>s.academic_class===teacherClass);
+    let html = `<div class="bg-white p-5 rounded-xl"><h2>Attendance - ${teacherClass}</h2><div id="attList"></div><button id="submitAttendance" class="apply-btn mt-3 w-full py-2">Submit</button></div>`;
+    document.getElementById('mainContent').innerHTML = html;
+    document.getElementById('attList').innerHTML = `<table class="w-full border"><thead><tr><th>Name</th><th>Present</th></tr></thead><tbody>${students.map(s=>`<tr><td class="p-2">${s.name}</td><td class="p-2"><input type="checkbox" class="attCheck" data-id="${s.id}"></td></tr>`).join('')}</tbody></table>`;
+    document.getElementById('submitAttendance').onclick = () => showToast("Attendance recorded (demo)");
+}
 async function sectionStudentsView() { showToast("Section Students - filter by section", false); }
 async function sectionFeesView() { showToast("Section Fees - summary by section", false); }
-async function staffPerformanceAnalysisView() { showToast("Staff Performance Analytics - coming soon", false); }
-async function academicPerformanceView() { showToast("Academic Performance Overview", false); }
-async function sectionAnalysisView() { showToast("Section-wise Analysis", false); }
+async function staffPerformanceAnalysisView() {
+    // Merge staff from teachers and profiles
+    let staffTeachers = schoolData.teachers.map(t => ({ id: t.id, name: t.name, role: t.role, source: 'teacher' }));
+    let staffProfiles = schoolData.profiles.filter(p => p.role && p.role !== 'parent').map(p => ({ id: p.id, name: p.full_name, role: p.role, source: 'profile' }));
+    let allStaff = [...staffTeachers, ...staffProfiles];
+
+    // Load appraisals
+    const appraisals = schoolData.staffAppraisals;
+
+    // Compute average per staff
+    const staffPerformance = allStaff.map(staff => {
+        const myAppraisals = appraisals.filter(a => a.staff_id === staff.id);
+        const avgGoal = myAppraisals.length ? myAppraisals.reduce((s, a) => s + (a.goal_completion || 0), 0) / myAppraisals.length : 0;
+        const avgSkill = myAppraisals.length ? myAppraisals.reduce((s, a) => s + (a.skill_rating || 0), 0) / myAppraisals.length : 0;
+        // Overall score: average of goal% (converted to 0-5) and skill rating, then scaled to %
+        const overall = ((avgGoal / 100) * 5 + avgSkill) / 2 * 20; // out of 100
+        return { ...staff, avgGoal, avgSkill, overallScore: overall.toFixed(1), appraisalCount: myAppraisals.length };
+    });
+
+    let html = `
+        <div class="card p-6">
+            <h2 class="text-2xl font-bold mb-4">📈 Staff Performance Analysis</h2>
+            <div class="filter-row">
+                <select id="staffRolePerfFilter" class="border rounded-xl p-2">
+                    <option value="all">All Roles</option>
+                    ${[...new Set(allStaff.map(s => s.role))].map(r => `<option>${r}</option>`).join('')}
+                </select>
+                <input type="text" id="staffPerfSearch" placeholder="🔍 Search name" class="flex-1 border rounded-xl p-2">
+                <button id="refreshPerfBtn" class="apply-btn px-4 py-2 rounded-full">Refresh</button>
+            </div>
+            <div class="table-container overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-100">
+                        <tr><th>Name</th><th>Role</th><th>Avg Goal Completion (%)</th><th>Avg Skill Rating (1-5)</th><th>Overall Score (%)</th><th># Appraisals</th></tr>
+                    </thead>
+                    <tbody id="perfTableBody"></tbody>
+                </table>
+            </div>
+            <canvas id="staffPerformanceChart" class="mt-8 max-h-80"></canvas>
+        </div>
+    `;
+    document.getElementById('mainContent').innerHTML = html;
+
+    function renderTable() {
+        const roleFilter = document.getElementById('staffRolePerfFilter').value;
+        const search = document.getElementById('staffPerfSearch').value.toLowerCase();
+        let filtered = staffPerformance.filter(s => (roleFilter === 'all' || s.role === roleFilter) &&
+            (s.name.toLowerCase().includes(search) || (s.role || '').toLowerCase().includes(search)));
+        const tbody = document.getElementById('perfTableBody');
+        tbody.innerHTML = filtered.map(s => `
+            <tr>
+                <td class="font-medium">${escapeHtml(s.name)}</td>
+                <td>${s.role}</td>
+                <td>${s.avgGoal.toFixed(1)}%</td>
+                <td>${s.avgSkill.toFixed(1)}</td>
+                <td><div class="w-full bg-gray-200 rounded-full h-2.5"><div class="bg-emerald-600 h-2.5 rounded-full" style="width: ${s.overallScore}%"></div></div>${s.overallScore}%</td>
+                <td>${s.appraisalCount}</td>
+            </tr>
+        `).join('');
+        // Update chart (top 10 by overall score)
+        const top10 = [...filtered].sort((a,b) => b.overallScore - a.overallScore).slice(0,10);
+        if (window.staffPerfChart) window.staffPerfChart.destroy();
+        window.staffPerfChart = new Chart(document.getElementById('staffPerformanceChart'), {
+            type: 'bar',
+            data: {
+                labels: top10.map(s => s.name.split(' ')[0]),
+                datasets: [{
+                    label: 'Overall Performance Score (%)',
+                    data: top10.map(s => s.overallScore),
+                    backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                    borderRadius: 8
+                }]
+            },
+            options: { scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Score %' } } } }
+        });
+    }
+
+    document.getElementById('staffRolePerfFilter').addEventListener('change', renderTable);
+    document.getElementById('staffPerfSearch').addEventListener('input', renderTable);
+    document.getElementById('refreshPerfBtn').addEventListener('click', async () => {
+        await refreshData();
+        // Recompute staffPerformance
+        const newAppraisals = schoolData.staffAppraisals;
+        staffPerformance.forEach(s => {
+            const my = newAppraisals.filter(a => a.staff_id === s.id);
+            const avgGoal = my.length ? my.reduce((sum, a) => sum + (a.goal_completion || 0), 0) / my.length : 0;
+            const avgSkill = my.length ? my.reduce((sum, a) => sum + (a.skill_rating || 0), 0) / my.length : 0;
+            s.avgGoal = avgGoal;
+            s.avgSkill = avgSkill;
+            s.overallScore = (((avgGoal / 100) * 5 + avgSkill) / 2 * 20).toFixed(1);
+            s.appraisalCount = my.length;
+        });
+        renderTable();
+        showToast("Data refreshed");
+    });
+    renderTable();
+}
+async function academicPerformanceView() { document.getElementById('mainContent').innerHTML = `<div class="bg-white p-5"><canvas id="perfChart" height="200"></canvas></div>`; setTimeout(()=>{ new Chart(document.getElementById('perfChart'),{ type:'bar', data:{ labels:CLASSES, datasets:[{ label:'Average Score', data:CLASSES.map(ac=>{ let avg = schoolData.results.filter(r=>schoolData.students.find(s=>s.id===r.student_id)?.academic_class===ac).reduce((a,b)=>a+(b.ca1+b.ca2+b.exam),0)/Math.max(1, schoolData.results.filter(r=>schoolData.students.find(s=>s.id===r.student_id)?.academic_class===ac).length); return avg||0; }), backgroundColor:'#f59e0b' }] } }); },100); }
+async function sectionAnalysisView() { let html = `<div class="bg-white p-5"><h2>Section Analysis</h2><select id="secAna" class="border p-2 w-full">${SECTIONS.map(s=>`<option>${s}</option>`)}</select><div id="secStats"></div></div>`; document.getElementById('mainContent').innerHTML = html; document.getElementById('secAna').onchange = () => { let sec = document.getElementById('secAna').value; let students = schoolData.students.filter(s=>s.section===sec); let paid = students.filter(s=>s.fee_status==='Paid').length; document.getElementById('secStats').innerHTML = `<p>Students: ${students.length} | Fees Paid: ${paid} | Pending: ${students.length-paid}</p>`; }; document.getElementById('secAna').dispatchEvent(new Event('change')); }
 async function gradeStudentView() { teacherResultEntry(); }
 
 // ========== ROLE MENUS & VIEW MAP ==========
