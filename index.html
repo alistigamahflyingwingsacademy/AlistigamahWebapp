@@ -1269,8 +1269,24 @@ async function showDashboard() {
 async function adminLogin(email,pwd){ let {data,error}=await supabaseClient.auth.signInWithPassword({email,password:pwd}); if(error) throw error; let {data:profile}=await supabaseClient.from('profiles').select('*').eq('id',data.user.id).single(); if(!profile || !roleMenus[profile.role]) throw new Error('Invalid role'); currentUser={id:profile.id, full_name:profile.full_name, role:profile.role}; await refreshData(); showDashboard(); closeModal('loginModal'); showToast(`Welcome ${currentUser.full_name}`); attachActivityListeners(); }
 async function staffLogin(username,pwd){ let {data:staff,error}=await supabaseClient.from('teachers').select('*').eq('username',username).single(); if(error||!staff) throw new Error('Staff not found'); if(staff.password!==pwd) throw new Error('Wrong password'); currentUser={id:staff.id, full_name:staff.name, role:staff.role||'teacher', assigned_class:staff.assigned_class}; await refreshData(); showDashboard(); closeModal('loginModal'); showToast(`Welcome ${currentUser.full_name}`); attachActivityListeners(); }
 async function parentLogin(regNo,pwd){ if(pwd!=='al123') throw new Error('Invalid password'); let student=schoolData.students.find(s=>s.reg_number===regNo); if(!student) throw new Error('Student not found'); currentUser={role:'parent', full_name:`Parent of ${student.name}`, studentId:student.id}; await refreshData(); showDashboard(); closeModal('parentModal'); showToast(`Logged in as parent`); attachActivityListeners(); }
-async function adminSignup(code,email,pwd,name,role){ if(code!=='ALIFLY2026') throw new Error('Invalid code'); let {data,error}=await supabaseClient.auth.signUp({email,password:pwd}); if(error) throw error; await supabaseClient.from('profiles').insert([{id:data.user.id, full_name:name, role}]); showToast('Account created! Please verify email.'); closeModal('adminSignupModal'); }
-
+async function adminSignup(code, email, pwd, name, role) {
+    if (code !== 'ALIFLY2026') throw new Error('Invalid code');
+    // Pass role and full_name as user metadata
+    const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password: pwd,
+        options: {
+            data: {
+                full_name: name,
+                role: role
+            }
+        }
+    });
+    if (error) throw error;
+    // Do NOT insert profile manually – the trigger will do it automatically
+    showToast('Account created! Please verify email.');
+    closeModal('adminSignupModal');
+}
 // ========== DOM EVENT LISTENERS ==========
 document.addEventListener('DOMContentLoaded', async()=>{
     await refreshData();
