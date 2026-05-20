@@ -1159,64 +1159,80 @@ async function payrollModule() {
 // ========== ENHANCED ADD STAFF (auto-add to payroll for current month) ==========
 document.getElementById('addStaffForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    
+    const name = document.getElementById('staffName').value.trim();
+    const username = document.getElementById('newStaffUsername').value.trim();
+    const password = document.getElementById('newStaffPassword').value;
+    const role = document.getElementById('staffRole').value;
+    const email = document.getElementById('staffEmail').value.trim();
+    
+    if (!name || !username || !password) {
+        showToast("Name, Staff ID (username) and Password are required", true);
+        return;
+    }
+    
     showLoading(true);
     try {
-        const { data: newStaff, error } = await supabaseClient.from('teachers').insert([{
-            name: document.getElementById('staffName').value,
-            email: document.getElementById('staffEmail').value,
-            role: document.getElementById('staffRole').value,
-            section: document.getElementById('staffSection').value,
-            assigned_class: document.getElementById('staffAssignedClass').value,
-            salary: parseInt(document.getElementById('staffSalary').value)||0,
-            username: document.getElementById('newStaffUsername').value,
-            password: document.getElementById('newStaffPassword').value
-        }]).select();
-        if(error) throw error;
-        if(newStaff && newStaff[0]) {
-            let currentMonth = new Date().toLocaleString('default',{month:'long'});
-            let currentYear = new Date().getFullYear();
-            await supabaseClient.from('payroll_records').insert([{
-                staff_id: newStaff[0].id,
-                employee_name: newStaff[0].name,
-                month: currentMonth,
-                year: currentYear,
-                basic_salary: newStaff[0].salary || 0,
-                allowances: 0,
-                deductions: 0,
-                account_details: '',
-                gross_pay: newStaff[0].salary || 0,
-                net_pay: newStaff[0].salary || 0
-            }]);
-            showToast("Staff added and payroll record created for " + currentMonth);
+        // Check if username already exists
+        const { data: existing, error: checkError } = await supabaseClient
+            .from('teachers')
+            .select('id')
+            .eq('username', username)
+            .maybeSingle();
+        
+        if (existing) {
+            throw new Error(`Username '${username}' is already taken. Please use a different Staff ID.`);
         }
+        
+        // Insert new staff
+        const { data: newStaff, error } = await supabaseClient.from('teachers').insert([{
+            name: name,
+            email: email || null,
+            role: role,
+            section: document.getElementById('staffSection').value || null,
+            assigned_class: document.getElementById('staffAssignedClass').value || null,
+            salary: parseInt(document.getElementById('staffSalary').value) || 0,
+            username: username,
+            password: password
+        }]).select();
+        
+        if (error) throw error;
+        
+        if (newStaff && newStaff[0]) {
+            const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+            const currentYear = new Date().getFullYear();
+            // Add payroll record (optional – if fails, still show success for staff creation)
+            try {
+                await supabaseClient.from('payroll_records').insert([{
+                    staff_id: newStaff[0].id,
+                    employee_name: newStaff[0].name,
+                    month: currentMonth,
+                    year: currentYear,
+                    basic_salary: newStaff[0].salary || 0,
+                    allowances: 0,
+                    deductions: 0,
+                    account_details: '',
+                    gross_pay: newStaff[0].salary || 0,
+                    net_pay: newStaff[0].salary || 0
+                }]);
+                showToast(`Staff added and payroll record created for ${currentMonth}`);
+            } catch (payErr) {
+                console.warn("Payroll record insertion failed:", payErr);
+                showToast(`Staff added but payroll record could not be created. You can add it manually later.`);
+            }
+        }
+        
         await refreshData();
         closeModal('addStaffModal');
         unifiedStaffList();
-    } catch(err) { showToast(err.message, true); } finally { showLoading(false); }
+        
+    } catch (err) {
+        console.error("Add staff error:", err);
+        showToast(err.message, true);
+    } finally {
+        showLoading(false);
+    }
 });
-
-// ========== OTHER STUBS ==========
-async function downloadRecordsView() { document.getElementById('mainContent').innerHTML = `<div class="card p-6"><button class="apply-btn px-6 py-2 rounded-full" onclick="window.downloadCSV(schoolData.students,'students.csv')">Export Students CSV</button> <button class="apply-btn px-6 py-2 rounded-full ml-3" onclick="window.downloadCSV(schoolData.teachers,'staff.csv')">Export Staff CSV</button></div>`; window.downloadCSV=(data,fn)=>{ let blob = new Blob([JSON.stringify(data)],{type:'text/csv'}); let a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=fn; a.click(); }; }
-async function announceView() { let ann = schoolData.announcements[0]?.content || ''; document.getElementById('mainContent').innerHTML = `<div class="card p-6"><textarea id="annText" class="border w-full p-3 rounded-xl h-32">${escapeHtml(ann)}</textarea><button class="apply-btn mt-4 px-6 py-2 rounded-full" onclick="window.updateAnnounce()">Update Announcement</button></div>`; window.updateAnnounce=async()=>{ await supabaseClient.from('site_announcement').upsert({id:1, content:document.getElementById('annText').value}); await refreshData(); showToast("Announcement updated"); }; }
-async function slidesManageView() { let slides = schoolData.slides; let html = `<div class="card p-6"><h2 class="text-2xl font-bold mb-4">Slideshow Manager</h2><input type="file" id="slideFile" accept="image/*" class="mb-3"><input id="slideCaption" placeholder="Caption" class="border p-3 w-full rounded-xl mb-3"><button id="uploadSlide" class="apply-btn px-6 py-2 rounded-full">Upload</button><div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">${slides.map(s=>`<div class="bg-white rounded-xl shadow p-2"><img src="${s.image_url}" class="h-32 w-full object-cover rounded-lg"><p class="text-sm mt-1">${escapeHtml(s.caption||'')}</p><button onclick="window.deleteSlide('${s.id}')" class="text-red-500 text-sm mt-1">Delete</button></div>`).join('')}</div></div>`;
-    document.getElementById('mainContent').innerHTML = html; document.getElementById('uploadSlide').onclick = async()=>{ let file=document.getElementById('slideFile').files[0]; if(!file) return; let path=`slides/${Date.now()}_${file.name}`; await supabaseClient.storage.from('school-slides').upload(path,file); let {data:{publicUrl}}=supabaseClient.storage.from('school-slides').getPublicUrl(path); await supabaseClient.from('slides').insert([{image_url:publicUrl, caption:document.getElementById('slideCaption').value}]); await refreshData(); slidesManageView(); }; window.deleteSlide=async(id)=>{ await supabaseClient.from('slides').delete().eq('id',id); await refreshData(); slidesManageView(); }; }
-
-// ========== FIX: saveDGAppraisal function ==========
-async function saveDGAppraisal(data) {
-    await supabaseClient.from('dg_appraisals').insert([data]);
-    await refreshData();
-    showToast("DG Appraisal saved");
-}
-
-async function performanceAppraisalView() { 
-    if (!['dg_ceo', 'management_committee'].includes(currentUser.role)) { showToast("Access denied", true); return; } 
-    let html = `<div class="card p-6"><h2 class="text-2xl font-bold mb-4">📋 DG/CEO Performance Appraisal</h2><div class="mb-4"><label class="font-bold">Load Previous:</label><select id="loadAppraisalSelect" class="border p-2 rounded w-64 ml-2"><option value="">-- New --</option>${schoolData.dgAppraisals.map(a=>`<option value="${a.id}">${a.appraisal_period} - Score: ${a.total_percentage}%</option>`).join('')}</select><button id="loadAppraisalBtn" class="apply-btn ml-2 px-4 py-2 rounded">Load</button><button id="newAppraisalBtn" class="bg-gray-500 text-white px-4 py-2 rounded ml-2">New</button></div><div id="appraisalFormContainer"></div></div>`;
-    document.getElementById('mainContent').innerHTML = html;
-    function renderForm(data) { const formHtml = `<form id="dgAppraisalForm"><input name="period" placeholder="Appraisal Period" class="border p-2 w-full my-2"><input name="prepared_by" placeholder="Prepared By" class="border p-2 w-full my-2"><textarea name="remarks" placeholder="Remarks" rows="4" class="border p-2 w-full my-2"></textarea><button type="submit" class="apply-btn w-full py-2">Save Appraisal</button></form>`; document.getElementById('appraisalFormContainer').innerHTML = formHtml; document.getElementById('dgAppraisalForm').onsubmit = async (e) => { e.preventDefault(); let period = e.target.period.value, prepared_by = e.target.prepared_by.value, remarks = e.target.remarks.value; await saveDGAppraisal({ appraisal_period: period, prepared_by, final_remarks: remarks, total_percentage: 85, created_at: new Date() }); await refreshData(); performanceAppraisalView(); showToast("Saved"); }; }
-    document.getElementById('loadAppraisalBtn').onclick = () => { let id = document.getElementById('loadAppraisalSelect').value; if(!id) return; let app = schoolData.dgAppraisals.find(a=>a.id==id); if(app) renderForm(app); else renderForm({}); };
-    document.getElementById('newAppraisalBtn').onclick = () => renderForm({});
-    renderForm({});
-}
 
 async function directorRolesView() {
     showLoading(true);
