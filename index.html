@@ -554,14 +554,12 @@ async function studentsViewEditable() {
 }
 
 // ========== UNIFIED STAFF LIST ==========
-
-    async function unifiedStaffList() {
-    // Combine staff from teachers and profiles
+async function unifiedStaffList() {
     let staffTeachers = schoolData.teachers.map(t => ({
         id: t.id,
         name: t.name,
         role: t.role,
-        email: t.email,
+        email: t.email || '',
         assigned_class: t.assigned_class,
         section: t.section || '',
         salary: t.salary || 0,
@@ -571,7 +569,7 @@ async function studentsViewEditable() {
         id: p.id,
         name: p.full_name,
         role: p.role,
-        email: p.email,
+        email: p.email || '',
         assigned_class: p.assigned_class || '',
         section: p.section || '',
         salary: p.salary || 0,
@@ -632,7 +630,6 @@ async function studentsViewEditable() {
     }
 
     function attachEditable() {
-        // Editable fields: name, email, salary
         document.querySelectorAll('.editable-staff').forEach(cell => {
             if (cell.getAttribute('contenteditable') !== 'true') return;
             cell.addEventListener('blur', async function() {
@@ -653,7 +650,6 @@ async function studentsViewEditable() {
             });
         });
 
-        // Class dropdown
         document.querySelectorAll('.staff-class-select').forEach(select => {
             select.addEventListener('change', async function() {
                 let id = this.dataset.id, source = this.dataset.source;
@@ -666,7 +662,6 @@ async function studentsViewEditable() {
             });
         });
 
-        // Section dropdown
         document.querySelectorAll('.staff-section-select').forEach(select => {
             select.addEventListener('change', async function() {
                 let id = this.dataset.id, source = this.dataset.source;
@@ -684,10 +679,11 @@ async function studentsViewEditable() {
     document.getElementById('staffSearch').addEventListener('input', render);
     document.getElementById('staffRoleFilter').addEventListener('change', render);
     document.getElementById('staffSectionFilter').addEventListener('change', render);
-        }
+}
 // ========== PAYROLL MODULE ==========
+
 async function payrollModule() {
-    // Only use teachers – payroll_records.staff_id references teachers.id
+    // Only teachers (profiles are admin accounts, not paid staff)
     let staffList = schoolData.teachers.map(t => ({
         id: t.id,
         name: t.name,
@@ -737,27 +733,28 @@ async function payrollModule() {
     </div>`;
     document.getElementById('mainContent').innerHTML = html;
 
-    async function ensureAllStaffHavePayrollRecords(month, year, staff) {
+    async function ensureAllStaffHavePayrollRecords(month, year, staffList) {
         let existing = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
         let newRecords = [];
-        for (let s of staff) {
-            let exists = existing.find(r => r.staff_id == s.id);
+        for (let staff of staffList) {
+            let exists = existing.find(r => r.staff_id == staff.id);
             if (!exists) {
                 newRecords.push({
-                    staff_id: s.id,
-                    employee_name: s.name,
+                    staff_id: staff.id,
+                    employee_name: staff.name,
                     month, year,
-                    basic_salary: s.salary || 0,
+                    basic_salary: staff.salary || 0,
                     allowances: 0,
                     deductions: 0,
                     account_details: '',
-                    gross_pay: s.salary || 0,
-                    net_pay: s.salary || 0
+                    gross_pay: staff.salary || 0,
+                    net_pay: staff.salary || 0
                 });
             }
         }
         if (newRecords.length > 0) {
-            await supabaseClient.from('payroll_records').insert(newRecords);
+            const { error } = await supabaseClient.from('payroll_records').insert(newRecords);
+            if (error) { showToast(error.message, true); return; }
             await refreshData();
             showToast(`Added ${newRecords.length} staff to payroll for ${month} ${year}`);
         }
@@ -769,29 +766,27 @@ async function payrollModule() {
         let sectionFilter = document.getElementById('payrollSectionFilter').value;
 
         let filteredStaff = staffList.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
+        // Ensure records exist before loading
         await ensureAllStaffHavePayrollRecords(month, year, filteredStaff);
         await refreshData();
 
-        // Now get records for these staff
-        let records = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
-        // Match with filteredStaff to ensure correct ordering
-        let matchedRecords = [];
-        for (let s of filteredStaff) {
-            let rec = records.find(r => r.staff_id == s.id);
-            if (rec) matchedRecords.push(rec);
+        let updatedRecords = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
+        let records = [];
+        for (let staff of filteredStaff) {
+            let rec = updatedRecords.find(r => r.staff_id === staff.id);
+            if (rec) records.push(rec);
         }
 
-        // Recalculate gross/net
-        matchedRecords.forEach(r => {
+        records.forEach(r => {
             r.gross_pay = (r.basic_salary || 0) + (r.allowances || 0);
             r.net_pay = r.gross_pay - (r.deductions || 0);
         });
 
         let tbody = document.getElementById('payrollTbody');
-        if (matchedRecords.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-500 p-4">No payroll records found for the selected filters.</td></tr>`;
+        if (records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No staff found for this month/year/section. Click "Sync Staff" to add.</td></tr>`;
         } else {
-            tbody.innerHTML = matchedRecords.map((r, i) => `
+            tbody.innerHTML = records.map((r, i) => `
                 <tr>
                     <td class="text-center border p-1">${i+1}</td>
                     <td class="border p-1 font-medium">${escapeHtml(r.employee_name)}</td>
@@ -807,7 +802,7 @@ async function payrollModule() {
 
         // Totals
         let totals = { basic: 0, allow: 0, gross: 0, ded: 0, net: 0 };
-        matchedRecords.forEach(r => {
+        records.forEach(r => {
             totals.basic += r.basic_salary || 0;
             totals.allow += r.allowances || 0;
             totals.gross += r.gross_pay || 0;
@@ -850,7 +845,6 @@ async function payrollModule() {
                     let net = gross - ded;
                     updateObj.gross_pay = gross;
                     updateObj.net_pay = net;
-                    // Update displayed gross/net cells
                     let grossCell = document.querySelector(`.gross-pay-${id}`);
                     let netCell = document.querySelector(`.net-pay-${id}`);
                     if (grossCell) grossCell.innerText = gross.toLocaleString();
@@ -861,7 +855,7 @@ async function payrollModule() {
                 if (error) { showToast(error.message, true); return; }
                 await refreshData();
                 showToast(`${field} updated`);
-                loadPayroll(); // refresh totals and table
+                loadPayroll();
             });
         });
     }
@@ -872,7 +866,6 @@ async function payrollModule() {
     document.getElementById('payrollMonth').addEventListener('change', loadPayroll);
     document.getElementById('payrollYear').addEventListener('change', loadPayroll);
 
-    // Export CSV
     document.getElementById('exportPayrollCsv').addEventListener('click', () => {
         let rows = [];
         document.querySelectorAll('#payrollTbody tr').forEach(row => {
@@ -888,7 +881,6 @@ async function payrollModule() {
         a.click();
     });
 
-    // Print Payroll
     document.getElementById('printPayrollBtn').addEventListener('click', () => {
         let printContent = document.getElementById('payrollTableContainer').innerHTML;
         let printWindow = window.open('', '_blank');
@@ -905,7 +897,6 @@ async function payrollModule() {
         printWindow.document.close();
     });
 
-    // Sync Staff to Payroll
     document.getElementById('syncStaffToPayroll').addEventListener('click', async () => {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
@@ -915,12 +906,10 @@ async function payrollModule() {
         loadPayroll();
     });
 
-    // Add Staff to Payroll – opens modal
     document.getElementById('addStaffToPayrollBtn').addEventListener('click', async () => {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
         let existingStaffIds = schoolData.payrollRecords.filter(r => r.month === month && r.year === year).map(r => r.staff_id);
-        // Only show teachers not already in payroll
         let availableStaff = staffList.filter(s => !existingStaffIds.includes(s.id));
         if (availableStaff.length === 0) {
             showToast("All staff already in payroll for this month/year");
@@ -940,9 +929,9 @@ async function payrollModule() {
         };
     });
 
-    // Initial load
     loadPayroll();
-}
+           }
+
     // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
 async function printResultSlip(studentId, term, year) {
     const student = schoolData.students.find(s => s.id == studentId);
