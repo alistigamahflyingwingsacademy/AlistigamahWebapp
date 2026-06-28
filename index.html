@@ -683,23 +683,14 @@ async function studentsViewEditable() {
     document.getElementById('staffSectionFilter').addEventListener('change', render);
             }
 // ========== PAYROLL MODULE ==========
-    async function payrollModule() {
-    // Combine staff from teachers and profiles (with salary info)
-    let staffTeachers = schoolData.teachers.map(t => ({
+        async function payrollModule() {
+    // Only use teachers – payroll_records.staff_id references teachers.id
+    let staffList = schoolData.teachers.map(t => ({
         id: t.id,
         name: t.name,
         section: t.section || '',
-        salary: t.salary || 0,
-        source: 'teacher'
+        salary: t.salary || 0
     }));
-    let staffProfiles = schoolData.profiles.filter(p => p.role && p.role !== 'parent').map(p => ({
-        id: p.id,
-        name: p.full_name,
-        section: p.section || '',
-        salary: p.salary || 0,
-        source: 'profile'
-    }));
-    let allStaff = [...staffTeachers, ...staffProfiles];
 
     let currentMonth = new Date().toLocaleString('default', { month: 'long' });
     let currentYear = new Date().getFullYear();
@@ -743,23 +734,22 @@ async function studentsViewEditable() {
     </div>`;
     document.getElementById('mainContent').innerHTML = html;
 
-    // Helper: ensure every filtered staff has a payroll record for the given month/year
-    async function ensureAllStaffHavePayrollRecords(month, year, staffList) {
+    async function ensureAllStaffHavePayrollRecords(month, year, staff) {
         let existing = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
         let newRecords = [];
-        for (let staff of staffList) {
-            let exists = existing.find(r => r.staff_id == staff.id);
+        for (let s of staff) {
+            let exists = existing.find(r => r.staff_id == s.id);
             if (!exists) {
                 newRecords.push({
-                    staff_id: staff.id,
-                    employee_name: staff.name,
+                    staff_id: s.id,
+                    employee_name: s.name,
                     month, year,
-                    basic_salary: staff.salary || 0,
+                    basic_salary: s.salary || 0,
                     allowances: 0,
                     deductions: 0,
                     account_details: '',
-                    gross_pay: staff.salary || 0,
-                    net_pay: staff.salary || 0
+                    gross_pay: s.salary || 0,
+                    net_pay: s.salary || 0
                 });
             }
         }
@@ -770,46 +760,51 @@ async function studentsViewEditable() {
         }
     }
 
-    // Main load function
     async function loadPayroll() {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
         let sectionFilter = document.getElementById('payrollSectionFilter').value;
 
-        let filteredStaff = allStaff.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
+        let filteredStaff = staffList.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
         await ensureAllStaffHavePayrollRecords(month, year, filteredStaff);
-        await refreshData(); // refresh to get newly inserted records
+        await refreshData();
 
-        let updatedRecords = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
-        let records = [];
-        for (let staff of filteredStaff) {
-            let rec = updatedRecords.find(r => r.staff_id === staff.id);
-            if (rec) records.push(rec);
+        // Now get records for these staff
+        let records = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
+        // Match with filteredStaff to ensure correct ordering
+        let matchedRecords = [];
+        for (let s of filteredStaff) {
+            let rec = records.find(r => r.staff_id == s.id);
+            if (rec) matchedRecords.push(rec);
         }
 
-        // Recalculate gross/net on the fly
-        records.forEach(r => {
+        // Recalculate gross/net
+        matchedRecords.forEach(r => {
             r.gross_pay = (r.basic_salary || 0) + (r.allowances || 0);
             r.net_pay = r.gross_pay - (r.deductions || 0);
         });
 
         let tbody = document.getElementById('payrollTbody');
-        tbody.innerHTML = records.map((r, i) => `
-            <tr>
-                <td class="text-center border p-1">${i+1}</td>
-                <td class="border p-1 font-medium">${escapeHtml(r.employee_name)}</td>
-                <td class="border p-1"><input type="text" class="payroll-basic w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.basic_salary || 0}"></td>
-                <td class="border p-1"><input type="text" class="payroll-allowance w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.allowances || 0}"></td>
-                <td class="border p-1 font-bold text-emerald-700 text-right gross-pay-${r.id}">${(r.gross_pay || 0).toLocaleString()}</td>
-                <td class="border p-1"><input type="text" class="payroll-deduction w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.deductions || 0}"></td>
-                <td class="border p-1 font-bold text-blue-700 text-right net-pay-${r.id}">${(r.net_pay || 0).toLocaleString()}</td>
-                <td class="border p-1"><input type="text" class="payroll-account w-full border-none bg-transparent" data-id="${r.id}" value="${escapeHtml(r.account_details || '')}"></td>
-            </tr>
-        `).join('');
+        if (matchedRecords.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-500 p-4">No payroll records found for the selected filters.</td></tr>`;
+        } else {
+            tbody.innerHTML = matchedRecords.map((r, i) => `
+                <tr>
+                    <td class="text-center border p-1">${i+1}</td>
+                    <td class="border p-1 font-medium">${escapeHtml(r.employee_name)}</td>
+                    <td class="border p-1"><input type="text" class="payroll-basic w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.basic_salary || 0}"></td>
+                    <td class="border p-1"><input type="text" class="payroll-allowance w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.allowances || 0}"></td>
+                    <td class="border p-1 font-bold text-emerald-700 text-right gross-pay-${r.id}">${(r.gross_pay || 0).toLocaleString()}</td>
+                    <td class="border p-1"><input type="text" class="payroll-deduction w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.deductions || 0}"></td>
+                    <td class="border p-1 font-bold text-blue-700 text-right net-pay-${r.id}">${(r.net_pay || 0).toLocaleString()}</td>
+                    <td class="border p-1"><input type="text" class="payroll-account w-full border-none bg-transparent" data-id="${r.id}" value="${escapeHtml(r.account_details || '')}"></td>
+                </tr>
+            `).join('');
+        }
 
         // Totals
         let totals = { basic: 0, allow: 0, gross: 0, ded: 0, net: 0 };
-        records.forEach(r => {
+        matchedRecords.forEach(r => {
             totals.basic += r.basic_salary || 0;
             totals.allow += r.allowances || 0;
             totals.gross += r.gross_pay || 0;
@@ -831,7 +826,6 @@ async function studentsViewEditable() {
         attachPayrollEditable();
     }
 
-    // Editable logic – recalc on blur
     function attachPayrollEditable() {
         const inputs = document.querySelectorAll('.payroll-basic, .payroll-allowance, .payroll-deduction, .payroll-account');
         inputs.forEach(inp => {
@@ -863,9 +857,8 @@ async function studentsViewEditable() {
                 const { error } = await supabaseClient.from('payroll_records').update(updateObj).eq('id', id);
                 if (error) { showToast(error.message, true); return; }
                 await refreshData();
-                showToast(`${field} updated to ${typeof val === 'number' ? '₦' + val.toLocaleString() : val}`);
-                // Recalculate totals after update (optional)
-                loadPayroll();
+                showToast(`${field} updated`);
+                loadPayroll(); // refresh totals and table
             });
         });
     }
@@ -898,7 +891,8 @@ async function studentsViewEditable() {
         let printWindow = window.open('', '_blank');
         printWindow.document.write(`
             <html><head><title>Payroll</title>
-            <style>body{font-family:Arial;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:8px;text-align:left;} .text-right{text-align:right;} .text-center{text-align:center;} .font-bold{font-weight:bold;} @media print{ .no-print{display:none;} }</style>
+            <style>body{font-family:Arial;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:8px;text-align:left;} .text-right{text-align:right;} .text-center{text-align:center;} .font-bold{font-weight:bold;} @media print{ .no-print{display:none;} }
+            </style>
             </head><body>
             <h2>Payroll - ${document.getElementById('payrollMonth').value} ${document.getElementById('payrollYear').value}</h2>
             ${printContent}
@@ -913,7 +907,7 @@ async function studentsViewEditable() {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
         let sectionFilter = document.getElementById('payrollSectionFilter').value;
-        let filteredStaff = allStaff.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
+        let filteredStaff = staffList.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
         await ensureAllStaffHavePayrollRecords(month, year, filteredStaff);
         loadPayroll();
     });
@@ -923,7 +917,8 @@ async function studentsViewEditable() {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
         let existingStaffIds = schoolData.payrollRecords.filter(r => r.month === month && r.year === year).map(r => r.staff_id);
-        let availableStaff = allStaff.filter(s => !existingStaffIds.includes(s.id));
+        // Only show teachers not already in payroll
+        let availableStaff = staffList.filter(s => !existingStaffIds.includes(s.id));
         if (availableStaff.length === 0) {
             showToast("All staff already in payroll for this month/year");
             return;
@@ -944,7 +939,7 @@ async function studentsViewEditable() {
 
     // Initial load
     loadPayroll();
-                }
+            }
     // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
 async function printResultSlip(studentId, term, year) {
     const student = schoolData.students.find(s => s.id == studentId);
