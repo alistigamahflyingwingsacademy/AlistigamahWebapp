@@ -667,161 +667,268 @@ async function unifiedStaffList() {
     document.getElementById('staffSectionFilter').addEventListener('change', render);
         }
 // ========== PAYROLL MODULE ==========
-async function payrollModule() {
-    let staffTeachers = schoolData.teachers.map(t=>({id:t.id,name:t.name,section:t.section||'', salary: t.salary || 0}));
-    let staffProfiles = schoolData.profiles.filter(p=>p.role && p.role !== 'parent').map(p=>({id:p.id,name:p.full_name,section:p.section||'', salary:0}));
+    async function payrollModule() {
+    // Combine staff from teachers and profiles (with salary info)
+    let staffTeachers = schoolData.teachers.map(t => ({
+        id: t.id,
+        name: t.name,
+        section: t.section || '',
+        salary: t.salary || 0,
+        source: 'teacher'
+    }));
+    let staffProfiles = schoolData.profiles.filter(p => p.role && p.role !== 'parent').map(p => ({
+        id: p.id,
+        name: p.full_name,
+        section: p.section || '',
+        salary: p.salary || 0,
+        source: 'profile'
+    }));
     let allStaff = [...staffTeachers, ...staffProfiles];
-    let currentMonth = new Date().toLocaleString('default',{month:'long'}), currentYear = new Date().getFullYear();
+
+    let currentMonth = new Date().toLocaleString('default', { month: 'long' });
+    let currentYear = new Date().getFullYear();
     let monthOptions = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    let html = `<div class="card p-6"><h2 class="text-2xl font-bold mb-4">💰 Payroll Management</h2><div class="filter-row"><select id="payrollMonth">${monthOptions.map(m=>`<option ${m===currentMonth?'selected':''}>${m}</option>`).join('')}</select><input id="payrollYear" type="number" value="${currentYear}" class="w-28"><select id="payrollSectionFilter"><option value="all">All Sections</option>${SECTIONS.map(s=>`<option>${s}</option>`).join('')}</select><button id="generatePayrollBtn" class="apply-btn">Refresh</button><button id="exportPayrollCsv" class="apply-btn bg-emerald-600">Export CSV</button><button id="syncStaffToPayroll" class="apply-btn bg-blue-600">Sync Staff to Payroll</button><button id="addStaffToPayrollBtn" class="apply-btn bg-purple-600">+ Add Staff to Payroll</button></div><div class="overflow-x-auto"><table class="min-w-full payroll-table border"><thead class="bg-gray-100"><tr><th>S/N</th><th>Employee Name</th><th>Basic Salary (₦)</th><th>Allowances (₦)</th><th>Gross Pay (₦)</th><th>Deductions (₦)</th><th>Net Pay (₦)</th><th>Account Details</th></tr></thead><tbody id="payrollTbody"></tbody><tfoot id="payrollTotals" class="bg-gray-50 font-bold"></tfoot>}</div></div>`;
+
+    let html = `
+    <div class="card p-6">
+        <div class="flex justify-between items-center flex-wrap gap-4 mb-4">
+            <h2 class="text-2xl font-bold">💰 Payroll Management</h2>
+            <div class="flex gap-2">
+                <button id="printPayrollBtn" class="apply-btn bg-blue-600 px-4 py-2 rounded-full"><i class="fas fa-print mr-2"></i>Print Payroll</button>
+                <button id="exportPayrollCsv" class="apply-btn bg-emerald-600 px-4 py-2 rounded-full"><i class="fas fa-file-csv mr-2"></i>Export CSV</button>
+            </div>
+        </div>
+        <div class="filter-row">
+            <select id="payrollMonth">${monthOptions.map(m => `<option ${m===currentMonth?'selected':''}>${m}</option>`).join('')}</select>
+            <input id="payrollYear" type="number" value="${currentYear}" class="w-28 border rounded p-2">
+            <select id="payrollSectionFilter"><option value="all">All Sections</option>${SECTIONS.map(s=>`<option>${s}</option>`).join('')}</select>
+            <button id="generatePayrollBtn" class="apply-btn px-4 py-2 rounded">Refresh</button>
+            <button id="syncStaffToPayroll" class="apply-btn bg-blue-600 px-4 py-2 rounded">Sync Staff</button>
+            <button id="addStaffToPayrollBtn" class="apply-btn bg-purple-600 px-4 py-2 rounded">+ Add Staff</button>
+        </div>
+        <div class="overflow-x-auto" id="payrollTableContainer">
+            <table class="min-w-full payroll-table border">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="p-2 border">S/N</th>
+                        <th class="p-2 border">Employee Name</th>
+                        <th class="p-2 border">Basic Salary (₦)</th>
+                        <th class="p-2 border">Allowances (₦)</th>
+                        <th class="p-2 border">Gross Pay (₦)</th>
+                        <th class="p-2 border">Deductions (₦)</th>
+                        <th class="p-2 border">Net Pay (₦)</th>
+                        <th class="p-2 border">Account Details</th>
+                    </tr>
+                </thead>
+                <tbody id="payrollTbody"></tbody>
+                <tfoot id="payrollTotals" class="bg-gray-50 font-bold"></tfoot>
+            </table>
+        </div>
+    </div>`;
     document.getElementById('mainContent').innerHTML = html;
-    
+
+    // Helper: ensure every filtered staff has a payroll record for the given month/year
     async function ensureAllStaffHavePayrollRecords(month, year, staffList) {
         let existing = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
         let newRecords = [];
-        for(let staff of staffList) {
+        for (let staff of staffList) {
             let exists = existing.find(r => r.staff_id == staff.id);
-            if(!exists) {
-                newRecords.push({ staff_id: staff.id, employee_name: staff.name, month, year, basic_salary: staff.salary || 0, allowances: 0, deductions: 0, account_details: '', gross_pay: staff.salary || 0, net_pay: staff.salary || 0 });
+            if (!exists) {
+                newRecords.push({
+                    staff_id: staff.id,
+                    employee_name: staff.name,
+                    month, year,
+                    basic_salary: staff.salary || 0,
+                    allowances: 0,
+                    deductions: 0,
+                    account_details: '',
+                    gross_pay: staff.salary || 0,
+                    net_pay: staff.salary || 0
+                });
             }
         }
-        if(newRecords.length > 0) {
+        if (newRecords.length > 0) {
             await supabaseClient.from('payroll_records').insert(newRecords);
             await refreshData();
             showToast(`Added ${newRecords.length} staff to payroll for ${month} ${year}`);
         }
     }
-    
+
+    // Main load function
     async function loadPayroll() {
-        let month = document.getElementById('payrollMonth').value, year = parseInt(document.getElementById('payrollYear').value), sectionFilter = document.getElementById('payrollSectionFilter').value;
-        let filteredStaff = allStaff.filter(s => sectionFilter==='all' || s.section===sectionFilter);
+        let month = document.getElementById('payrollMonth').value;
+        let year = parseInt(document.getElementById('payrollYear').value);
+        let sectionFilter = document.getElementById('payrollSectionFilter').value;
+
+        let filteredStaff = allStaff.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
         await ensureAllStaffHavePayrollRecords(month, year, filteredStaff);
-        await refreshData();
+        await refreshData(); // refresh to get newly inserted records
+
         let updatedRecords = schoolData.payrollRecords.filter(r => r.month === month && r.year === year);
         let records = [];
-        for(let staff of filteredStaff) {
+        for (let staff of filteredStaff) {
             let rec = updatedRecords.find(r => r.staff_id === staff.id);
-            if(rec) records.push(rec);
+            if (rec) records.push(rec);
         }
-        records.forEach(r => { r.gross_pay = (r.basic_salary||0) + (r.allowances||0); r.net_pay = r.gross_pay - (r.deductions||0); });
+
+        // Recalculate gross/net on the fly
+        records.forEach(r => {
+            r.gross_pay = (r.basic_salary || 0) + (r.allowances || 0);
+            r.net_pay = r.gross_pay - (r.deductions || 0);
+        });
+
         let tbody = document.getElementById('payrollTbody');
-        tbody.innerHTML = records.map((r,i)=>`<tr><td class="text-center">${i+1}</td><td class="font-medium">${escapeHtml(r.employee_name)}</td><td><input type="text" class="payroll-basic" data-id="${r.id}" value="${r.basic_salary||0}" style="width:100px;"></td><td><input type="text" class="payroll-allowance" data-id="${r.id}" value="${r.allowances||0}" style="width:100px;"></td><td class="gross-pay-${r.id} font-bold text-emerald-700">${(r.gross_pay||0).toLocaleString()}</td><td><input type="text" class="payroll-deduction" data-id="${r.id}" value="${r.deductions||0}" style="width:100px;"></td><td class="net-pay-${r.id} font-bold text-blue-700">${(r.net_pay||0).toLocaleString()}</td><td><input type="text" class="payroll-account" data-id="${r.id}" value="${escapeHtml(r.account_details||'')}" style="width:150px;"></td></tr>`).join('');
-        let totals = {basic:0,allow:0,gross:0,ded:0,net:0};
-        records.forEach(r=>{ totals.basic+=r.basic_salary||0; totals.allow+=r.allowances||0; totals.gross+=r.gross_pay||0; totals.ded+=r.deductions||0; totals.net+=r.net_pay||0; });
-        document.getElementById('payrollTotals').innerHTML = `<tr><td colspan="2" class="text-right font-bold">TOTAL</td><td class="font-bold">₦${totals.basic.toLocaleString()}</td><td class="font-bold">₦${totals.allow.toLocaleString()}</td><td class="font-bold">₦${totals.gross.toLocaleString()}</td><td class="font-bold">₦${totals.ded.toLocaleString()}</td><td class="font-bold">₦${totals.net.toLocaleString()}</td><td></td></tr>`;
+        tbody.innerHTML = records.map((r, i) => `
+            <tr>
+                <td class="text-center border p-1">${i+1}</td>
+                <td class="border p-1 font-medium">${escapeHtml(r.employee_name)}</td>
+                <td class="border p-1"><input type="text" class="payroll-basic w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.basic_salary || 0}"></td>
+                <td class="border p-1"><input type="text" class="payroll-allowance w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.allowances || 0}"></td>
+                <td class="border p-1 font-bold text-emerald-700 text-right gross-pay-${r.id}">${(r.gross_pay || 0).toLocaleString()}</td>
+                <td class="border p-1"><input type="text" class="payroll-deduction w-full border-none bg-transparent text-right" data-id="${r.id}" value="${r.deductions || 0}"></td>
+                <td class="border p-1 font-bold text-blue-700 text-right net-pay-${r.id}">${(r.net_pay || 0).toLocaleString()}</td>
+                <td class="border p-1"><input type="text" class="payroll-account w-full border-none bg-transparent" data-id="${r.id}" value="${escapeHtml(r.account_details || '')}"></td>
+            </tr>
+        `).join('');
+
+        // Totals
+        let totals = { basic: 0, allow: 0, gross: 0, ded: 0, net: 0 };
+        records.forEach(r => {
+            totals.basic += r.basic_salary || 0;
+            totals.allow += r.allowances || 0;
+            totals.gross += r.gross_pay || 0;
+            totals.ded += r.deductions || 0;
+            totals.net += r.net_pay || 0;
+        });
+        document.getElementById('payrollTotals').innerHTML = `
+            <tr>
+                <td colspan="2" class="text-right font-bold border p-2">TOTAL</td>
+                <td class="font-bold border p-2 text-right">₦${totals.basic.toLocaleString()}</td>
+                <td class="font-bold border p-2 text-right">₦${totals.allow.toLocaleString()}</td>
+                <td class="font-bold border p-2 text-right">₦${totals.gross.toLocaleString()}</td>
+                <td class="font-bold border p-2 text-right">₦${totals.ded.toLocaleString()}</td>
+                <td class="font-bold border p-2 text-right">₦${totals.net.toLocaleString()}</td>
+                <td class="border p-2"></td>
+            </tr>
+        `;
+
         attachPayrollEditable();
     }
+
+    // Editable logic – recalc on blur
     function attachPayrollEditable() {
-        document.querySelectorAll('.payroll-basic, .payroll-allowance, .payroll-deduction, .payroll-account').forEach(inp => {
-            inp.addEventListener('blur', async () => {
-                let id = inp.dataset.id;
-                let field = inp.classList.contains('payroll-basic') ? 'basic_salary' : (inp.classList.contains('payroll-allowance') ? 'allowances' : (inp.classList.contains('payroll-deduction') ? 'deductions' : 'account_details'));
-                let rawVal = inp.value;
+        const inputs = document.querySelectorAll('.payroll-basic, .payroll-allowance, .payroll-deduction, .payroll-account');
+        inputs.forEach(inp => {
+            inp.addEventListener('blur', async function() {
+                let id = this.dataset.id;
+                let field = this.classList.contains('payroll-basic') ? 'basic_salary' :
+                            this.classList.contains('payroll-allowance') ? 'allowances' :
+                            this.classList.contains('payroll-deduction') ? 'deductions' : 'account_details';
+                let rawVal = this.value;
                 let val = (field === 'account_details') ? rawVal : (parseFloat(rawVal) || 0);
                 let updateObj = { [field]: val };
-                if(field === 'basic_salary' || field === 'allowances' || field === 'deductions') {
+
+                if (field === 'basic_salary' || field === 'allowances' || field === 'deductions') {
                     let record = schoolData.payrollRecords.find(r => r.id == id);
-                    let basic = field === 'basic_salary' ? val : (record?.basic_salary||0);
-                    let allow = field === 'allowances' ? val : (record?.allowances||0);
-                    let ded = field === 'deductions' ? val : (record?.deductions||0);
-                    updateObj.gross_pay = basic + allow;
-                    updateObj.net_pay = updateObj.gross_pay - ded;
+                    let basic = field === 'basic_salary' ? val : (record?.basic_salary || 0);
+                    let allow = field === 'allowances' ? val : (record?.allowances || 0);
+                    let ded = field === 'deductions' ? val : (record?.deductions || 0);
+                    let gross = basic + allow;
+                    let net = gross - ded;
+                    updateObj.gross_pay = gross;
+                    updateObj.net_pay = net;
+                    // Update displayed gross/net cells
+                    let grossCell = document.querySelector(`.gross-pay-${id}`);
+                    let netCell = document.querySelector(`.net-pay-${id}`);
+                    if (grossCell) grossCell.innerText = gross.toLocaleString();
+                    if (netCell) netCell.innerText = net.toLocaleString();
                 }
+
                 const { error } = await supabaseClient.from('payroll_records').update(updateObj).eq('id', id);
                 if (error) { showToast(error.message, true); return; }
-                await refreshData(); loadPayroll();
-                showToast(`${field} updated`);
+                await refreshData();
+                showToast(`${field} updated to ${typeof val === 'number' ? '₦' + val.toLocaleString() : val}`);
+                // Recalculate totals after update (optional)
+                loadPayroll();
             });
         });
     }
+
+    // Event listeners
     document.getElementById('generatePayrollBtn').addEventListener('click', async () => { await refreshData(); loadPayroll(); });
     document.getElementById('payrollSectionFilter').addEventListener('change', loadPayroll);
     document.getElementById('payrollMonth').addEventListener('change', loadPayroll);
     document.getElementById('payrollYear').addEventListener('change', loadPayroll);
+
+    // Export CSV
     document.getElementById('exportPayrollCsv').addEventListener('click', () => {
-        let rows = []; document.querySelectorAll('#payrollTbody tr').forEach(row => { let cols = []; row.querySelectorAll('td').forEach(cell => cols.push(cell.innerText)); rows.push(cols); });
-        let csv = rows.map(row => row.join(',')).join('\n'); let blob = new Blob([csv], {type: 'text/csv'}); let a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'payroll.csv'; a.click();
+        let rows = [];
+        document.querySelectorAll('#payrollTbody tr').forEach(row => {
+            let cols = [];
+            row.querySelectorAll('td').forEach(cell => cols.push(cell.innerText.trim()));
+            rows.push(cols);
+        });
+        let csv = rows.map(row => row.join(',')).join('\n');
+        let blob = new Blob([csv], { type: 'text/csv' });
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `payroll_${document.getElementById('payrollMonth').value}_${document.getElementById('payrollYear').value}.csv`;
+        a.click();
     });
+
+    // Print Payroll
+    document.getElementById('printPayrollBtn').addEventListener('click', () => {
+        let printContent = document.getElementById('payrollTableContainer').innerHTML;
+        let printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html><head><title>Payroll</title>
+            <style>body{font-family:Arial;padding:20px;} table{width:100%;border-collapse:collapse;} th,td{border:1px solid #000;padding:8px;text-align:left;} .text-right{text-align:right;} .text-center{text-align:center;} .font-bold{font-weight:bold;} @media print{ .no-print{display:none;} }</style>
+            </head><body>
+            <h2>Payroll - ${document.getElementById('payrollMonth').value} ${document.getElementById('payrollYear').value}</h2>
+            ${printContent}
+            <p class="no-print"><button onclick="window.print();">Print</button> <button onclick="window.close();">Close</button></p>
+            </body></html>
+        `);
+        printWindow.document.close();
+    });
+
+    // Sync Staff to Payroll
     document.getElementById('syncStaffToPayroll').addEventListener('click', async () => {
-        let month = document.getElementById('payrollMonth').value, year = parseInt(document.getElementById('payrollYear').value);
-        await ensureAllStaffHavePayrollRecords(month, year, allStaff);
+        let month = document.getElementById('payrollMonth').value;
+        let year = parseInt(document.getElementById('payrollYear').value);
+        let sectionFilter = document.getElementById('payrollSectionFilter').value;
+        let filteredStaff = allStaff.filter(s => sectionFilter === 'all' || s.section === sectionFilter);
+        await ensureAllStaffHavePayrollRecords(month, year, filteredStaff);
         loadPayroll();
     });
+
+    // Add Staff to Payroll – opens modal
     document.getElementById('addStaffToPayrollBtn').addEventListener('click', async () => {
         let month = document.getElementById('payrollMonth').value;
         let year = parseInt(document.getElementById('payrollYear').value);
         let existingStaffIds = schoolData.payrollRecords.filter(r => r.month === month && r.year === year).map(r => r.staff_id);
         let availableStaff = allStaff.filter(s => !existingStaffIds.includes(s.id));
-        if(availableStaff.length === 0) { showToast("All staff are already in payroll for this month/year"); return; }
+        if (availableStaff.length === 0) {
+            showToast("All staff already in payroll for this month/year");
+            return;
+        }
         let select = document.getElementById('payrollStaffSelect');
-        select.innerHTML = '<option value="">-- Select Staff --</option>' + availableStaff.map(s => `<option value="${s.id}" data-salary="${s.salary}">${escapeHtml(s.name)} (${s.section||'No section'})</option>`).join('');
+        select.innerHTML = '<option value="">-- Select Staff --</option>' + 
+            availableStaff.map(s => `<option value="${s.id}" data-salary="${s.salary}">${escapeHtml(s.name)} (${s.section||'No section'})</option>`).join('');
         document.getElementById('payrollStaffSalary').value = '';
         document.getElementById('payrollStaffAllowances').value = '0';
         document.getElementById('payrollStaffDeductions').value = '0';
         document.getElementById('payrollStaffAccount').value = '';
         document.getElementById('addStaffToPayrollModal').style.display = 'flex';
         select.onchange = () => {
-            let selectedOption = select.options[select.selectedIndex];
-            let salary = selectedOption.getAttribute('data-salary') || 0;
+            let salary = select.options[select.selectedIndex]?.getAttribute('data-salary') || 0;
             document.getElementById('payrollStaffSalary').value = salary;
         };
     });
+
+    // Initial load
     loadPayroll();
-}
-
-// Add to Payroll form submission
-document.getElementById('addToPayrollForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    let staffId = document.getElementById('payrollStaffSelect').value;
-    if(!staffId) { showToast("Please select a staff member", true); return; }
-    let month = document.getElementById('payrollMonth').value;
-    let year = parseInt(document.getElementById('payrollYear').value);
-    let basicSalary = parseFloat(document.getElementById('payrollStaffSalary').value) || 0;
-    let allowances = parseFloat(document.getElementById('payrollStaffAllowances').value) || 0;
-    let deductions = parseFloat(document.getElementById('payrollStaffDeductions').value) || 0;
-    let account = document.getElementById('payrollStaffAccount').value;
-    let grossPay = basicSalary + allowances;
-    let netPay = grossPay - deductions;
-    showLoading(true);
-    try {
-        let staff = schoolData.teachers.find(t => t.id == staffId) || schoolData.profiles.find(p => p.id == staffId);
-        let staffName = staff ? staff.name || staff.full_name : "Unknown";
-        await supabaseClient.from('payroll_records').insert([{ staff_id: staffId, employee_name: staffName, month, year, basic_salary: basicSalary, allowances: allowances, deductions: deductions, account_details: account, gross_pay: grossPay, net_pay: netPay }]);
-        await refreshData();
-        showToast(`Staff added to payroll for ${month} ${year}`);
-        closeModal('addStaffToPayrollModal');
-        payrollModule();
-    } catch(err) { showToast(err.message, true); } finally { showLoading(false); }
-});
-
-// Add Staff form submission (auto-add to payroll)
-document.getElementById('addStaffForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    showLoading(true);
-    try {
-        const { data: newStaff, error } = await supabaseClient.from('teachers').insert([{
-            name: document.getElementById('staffName').value,
-            email: document.getElementById('staffEmail').value,
-            role: document.getElementById('staffRole').value,
-            section: document.getElementById('staffSection').value,
-            assigned_class: document.getElementById('staffAssignedClass').value,
-            salary: parseInt(document.getElementById('staffSalary').value)||0,
-            username: document.getElementById('newStaffUsername').value,
-            password: document.getElementById('newStaffPassword').value
-        }]).select();
-        if(error) throw error;
-        if(newStaff && newStaff[0]) {
-            let currentMonth = new Date().toLocaleString('default',{month:'long'});
-            let currentYear = new Date().getFullYear();
-            await supabaseClient.from('payroll_records').insert([{ staff_id: newStaff[0].id, employee_name: newStaff[0].name, month: currentMonth, year: currentYear, basic_salary: newStaff[0].salary || 0, allowances: 0, deductions: 0, account_details: '', gross_pay: newStaff[0].salary || 0, net_pay: newStaff[0].salary || 0 }]);
-            showToast("Staff added and payroll record created for " + currentMonth);
-        }
-        await refreshData();
-        closeModal('addStaffModal');
-        unifiedStaffList();
-    } catch(err) { showToast(err.message, true); } finally { showLoading(false); }
-});
-
+                }
     // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
 async function printResultSlip(studentId, term, year) {
     const student = schoolData.students.find(s => s.id == studentId);
