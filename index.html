@@ -556,6 +556,7 @@ async function studentsViewEditable() {
 // ========== UNIFIED STAFF LIST ==========
 
     async function unifiedStaffList() {
+    // Combine staff from teachers and profiles
     let staffTeachers = schoolData.teachers.map(t => ({
         id: t.id,
         name: t.name,
@@ -617,21 +618,21 @@ async function studentsViewEditable() {
             (sectionFilter === 'all' || (s.section||'').toLowerCase().includes(sectionFilter.toLowerCase()))
         );
         let tbody = document.getElementById('staffUnifiedBody');
-        tbody.innerHTML = filtered.map(s => {
-            const isTeacher = s.source === 'teacher';
-            return `<tr>
+        tbody.innerHTML = filtered.map(s => `
+            <tr>
                 <td class="editable-staff" data-field="name" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${escapeHtml(s.name)}</td>
                 <td class="font-semibold text-amber-700">${s.role}</td>
                 <td class="editable-staff" data-field="email" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${escapeHtml(s.email)}</td>
-                <td>${isTeacher ? `<select class="staff-class-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${CLASSES.map(cls => `<option value="${cls}" ${s.assigned_class === cls ? 'selected' : ''}>${cls}</option>`).join('')}</select>` : escapeHtml(s.assigned_class || '—')}</td>
-                <td>${isTeacher ? `<select class="staff-section-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${SECTIONS.map(sec => `<option value="${sec}" ${s.section === sec ? 'selected' : ''}>${sec}</option>`).join('')}</select>` : escapeHtml(s.section || '—')}</td>
-                <td>${isTeacher ? `<span class="editable-staff salary-cell" data-field="salary" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${s.salary ? '₦'+s.salary.toLocaleString() : '0'}</span>` : '—'}</td>
-            </tr>`;
-        }).join('');
+                <td><select class="staff-class-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${CLASSES.map(cls => `<option value="${cls}" ${s.assigned_class === cls ? 'selected' : ''}>${cls}</option>`).join('')}</select></td>
+                <td><select class="staff-section-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${SECTIONS.map(sec => `<option value="${sec}" ${s.section === sec ? 'selected' : ''}>${sec}</option>`).join('')}</select></td>
+                <td class="editable-staff" data-field="salary" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${s.salary ? '₦'+s.salary.toLocaleString() : '0'}</td>
+            </tr>
+        `).join('');
         attachEditable();
     }
 
     function attachEditable() {
+        // Editable fields: name, email, salary
         document.querySelectorAll('.editable-staff').forEach(cell => {
             if (cell.getAttribute('contenteditable') !== 'true') return;
             cell.addEventListener('blur', async function() {
@@ -652,6 +653,7 @@ async function studentsViewEditable() {
             });
         });
 
+        // Class dropdown
         document.querySelectorAll('.staff-class-select').forEach(select => {
             select.addEventListener('change', async function() {
                 let id = this.dataset.id, source = this.dataset.source;
@@ -664,6 +666,7 @@ async function studentsViewEditable() {
             });
         });
 
+        // Section dropdown
         document.querySelectorAll('.staff-section-select').forEach(select => {
             select.addEventListener('change', async function() {
                 let id = this.dataset.id, source = this.dataset.source;
@@ -681,9 +684,9 @@ async function studentsViewEditable() {
     document.getElementById('staffSearch').addEventListener('input', render);
     document.getElementById('staffRoleFilter').addEventListener('change', render);
     document.getElementById('staffSectionFilter').addEventListener('change', render);
-            }
+        }
 // ========== PAYROLL MODULE ==========
-        async function payrollModule() {
+async function payrollModule() {
     // Only use teachers – payroll_records.staff_id references teachers.id
     let staffList = schoolData.teachers.map(t => ({
         id: t.id,
@@ -939,7 +942,7 @@ async function studentsViewEditable() {
 
     // Initial load
     loadPayroll();
-            }
+}
     // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
 async function printResultSlip(studentId, term, year) {
     const student = schoolData.students.find(s => s.id == studentId);
