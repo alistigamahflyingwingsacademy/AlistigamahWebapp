@@ -235,33 +235,38 @@ async function adminLogin(email, pwd) {
     }
     currentUser = { id: profile.id, full_name: profile.full_name, role: profile.role };
     await refreshData();
+    closeModal('loginModal');  // <-- Add this
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('appContainer').classList.remove('hidden');
     showToast(`Welcome ${currentUser.full_name}`);
     showDashboard();
 }
+
 async function staffLogin(username, pwd) {
     let { data: staff, error } = await supabaseClient.from('teachers').select('*').eq('username', username).single();
     if (error || !staff) throw new Error('Staff not found');
     if (staff.password !== pwd) throw new Error('Wrong password');
     currentUser = { id: staff.id, full_name: staff.name, role: staff.role || 'teacher', assigned_class: staff.assigned_class };
     await refreshData();
+    closeModal('loginModal');  // <-- Add this
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('appContainer').classList.remove('hidden');
     showToast(`Welcome ${currentUser.full_name}`);
     showDashboard();
 }
+
 async function parentLogin(regNo, pwd) {
     if (pwd !== 'al123') throw new Error('Invalid password');
     let student = schoolData.students.find(s => s.reg_number === regNo);
     if (!student) throw new Error('Student not found');
     currentUser = { role: 'parent', full_name: `Parent of ${student.name}`, studentId: student.id };
     await refreshData();
+    closeModal('parentModal');  // <-- Add this
     document.getElementById('landingPage').style.display = 'none';
     document.getElementById('appContainer').classList.remove('hidden');
     showToast(`Logged in as parent of ${student.name}`);
     showDashboard();
-}
+        }
 async function adminSignup(code, email, pwd, name, role) {
     if (code !== 'ALIFLY2026') throw new Error('Invalid code');
     let { data, error } = await supabaseClient.auth.signUp({ email, password: pwd });
@@ -549,7 +554,8 @@ async function studentsViewEditable() {
 }
 
 // ========== UNIFIED STAFF LIST ==========
-async function unifiedStaffList() {
+
+    async function unifiedStaffList() {
     let staffTeachers = schoolData.teachers.map(t => ({
         id: t.id,
         name: t.name,
@@ -584,7 +590,16 @@ async function unifiedStaffList() {
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full">
-                <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Assigned Class</th><th>Section</th><th>Salary</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Email</th>
+                        <th>Assigned Class</th>
+                        <th>Section</th>
+                        <th>Salary</th>
+                    </tr>
+                </thead>
                 <tbody id="staffUnifiedBody"></tbody>
             </table>
         </div>
@@ -602,16 +617,17 @@ async function unifiedStaffList() {
             (sectionFilter === 'all' || (s.section||'').toLowerCase().includes(sectionFilter.toLowerCase()))
         );
         let tbody = document.getElementById('staffUnifiedBody');
-        tbody.innerHTML = filtered.map(s => `
-            <tr>
+        tbody.innerHTML = filtered.map(s => {
+            const isTeacher = s.source === 'teacher';
+            return `<tr>
                 <td class="editable-staff" data-field="name" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${escapeHtml(s.name)}</td>
                 <td class="font-semibold text-amber-700">${s.role}</td>
                 <td class="editable-staff" data-field="email" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${escapeHtml(s.email)}</td>
-                <td><select class="staff-class-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${CLASSES.map(cls => `<option value="${cls}" ${s.assigned_class === cls ? 'selected' : ''}>${cls}</option>`).join('')}</select></td>
-                <td><select class="staff-section-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${SECTIONS.map(sec => `<option value="${sec}" ${s.section === sec ? 'selected' : ''}>${sec}</option>`).join('')}</select></td>
-                <td class="editable-staff salary-cell" data-field="salary" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${s.salary ? '₦'+s.salary.toLocaleString() : '0'}</td>
-            </tr>
-        `).join('');
+                <td>${isTeacher ? `<select class="staff-class-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${CLASSES.map(cls => `<option value="${cls}" ${s.assigned_class === cls ? 'selected' : ''}>${cls}</option>`).join('')}</select>` : escapeHtml(s.assigned_class || '—')}</td>
+                <td>${isTeacher ? `<select class="staff-section-select" data-id="${s.id}" data-source="${s.source}"><option value="">— None —</option>${SECTIONS.map(sec => `<option value="${sec}" ${s.section === sec ? 'selected' : ''}>${sec}</option>`).join('')}</select>` : escapeHtml(s.section || '—')}</td>
+                <td>${isTeacher ? `<span class="editable-staff salary-cell" data-field="salary" data-id="${s.id}" data-source="${s.source}" contenteditable="true">${s.salary ? '₦'+s.salary.toLocaleString() : '0'}</span>` : '—'}</td>
+            </tr>`;
+        }).join('');
         attachEditable();
     }
 
@@ -665,7 +681,7 @@ async function unifiedStaffList() {
     document.getElementById('staffSearch').addEventListener('input', render);
     document.getElementById('staffRoleFilter').addEventListener('change', render);
     document.getElementById('staffSectionFilter').addEventListener('change', render);
-        }
+            }
 // ========== PAYROLL MODULE ==========
     async function payrollModule() {
     // Combine staff from teachers and profiles (with salary info)
