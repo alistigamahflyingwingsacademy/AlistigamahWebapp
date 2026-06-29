@@ -96,6 +96,72 @@
         <div class="mt-12 bg-white rounded-2xl shadow-lg overflow-hidden"><div class="bg-amber-50 px-6 py-4 border-b"><h2 class="text-2xl font-bold text-gray-800"><i class="fas fa-gavel text-amber-600 mr-2"></i>Rules and Regulations</h2></div><div class="p-6"><ul class="regulations-list space-y-3"><li>Adherence to regular payment of fees and forms dues.</li><li>Parents/Guardians should be vigilant to their children/wards concerning punctuality.</li><li>Obtain the school uniform for the section as prescribed.</li><li>No applicant would be allowed to attend classes without being duly registered.</li><li>Cell-Phones and lunch money are not allowed; food should be provided before stepping into the school premises.</li><li>No student should leave the school before closing without a genuine reason from the parent/guardian.</li></ul><div class="mt-6 bg-gray-50 p-4 rounded-xl border-l-4 border-amber-500 text-sm text-gray-700"><p><strong>NB:</strong></p><ul class="list-disc pl-5 mt-1 space-y-1"><li>School uniform should be obtained from the school.</li><li>Class placement is based on performance and age.</li><li>Returning this form means accepting the above rules.</li></ul></div></div></div>
     </div>
     <footer class="bg-slate-900 text-white text-center py-4 mt-auto"><p>© 2026 Al‑Istiqaamah Flying Wings Academy | No. 10 Federal Government Layout, Samaru, Zaria | <i class="fas fa-microchip"></i> Powered by Arrahmahtelecommunications</p></footer>
+            </div>
+        <!-- ========== MODALS ========== -->
+<div id="loginModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('loginModal')">&times;</span><h2 class="text-2xl font-bold mb-4">Access Portal</h2><div class="flex gap-3 mb-4"><button id="adminTab" class="flex-1 py-2 bg-amber-500 rounded-full text-white">Admin</button><button id="staffTab" class="flex-1 py-2 bg-gray-200 rounded-full">Staff</button></div><form id="adminLoginForm"><input id="adminEmail" placeholder="Email" class="border p-3 w-full mb-3 rounded-xl"><input id="adminPassword" placeholder="Password" type="password" class="border p-3 w-full mb-4 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl font-semibold">Login</button></form><form id="staffLoginForm" style="display:none"><input id="staffUsername" placeholder="Staff ID" class="border p-3 w-full mb-3 rounded-xl"><input id="staffPassword" placeholder="Password" type="password" class="border p-3 w-full mb-4 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl">Login</button></form></div></div>
+
+<div id="parentModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('parentModal')">&times;</span><h2 class="text-2xl font-bold mb-4">Parent Login</h2><form id="parentLoginForm"><input id="studentRegNo" placeholder="Student Reg Number" class="border p-3 w-full mb-3 rounded-xl"><input id="parentPwd" placeholder="Password (default: al123)" type="password" class="border p-3 w-full mb-4 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl">Login</button></form></div></div>
+
+<div id="adminSignupModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('adminSignupModal')">&times;</span><h2 class="text-2xl font-bold mb-3">Admin Signup</h2><form id="adminSignupForm"><input id="regCode" placeholder="Registration Code" class="border p-3 w-full mb-2 rounded-xl"><input id="signupEmail" placeholder="Email" class="border p-3 w-full mb-2 rounded-xl"><input id="signupPassword" placeholder="Password" type="password" class="border p-3 w-full mb-2 rounded-xl"><input id="signupFullName" placeholder="Full Name" class="border p-3 w-full mb-2 rounded-xl"><select id="signupRole" class="border p-3 w-full mb-4 rounded-xl"><option value="dg_ceo">DG/CEO</option><option value="daf">DAF</option><option value="management_committee">Management Committee</option><option value="do">DO</option><option value="der">DER</option><option value="dprpa">DPRPA</option><option value="headteacher">Headteacher</option><option value="teacher">Teacher</option></select><button type="submit" class="apply-btn w-full py-3 rounded-xl">Create Account</button></form></div></div>
+
+<div id="contactModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('contactModal')">&times;</span><h3 class="text-2xl font-bold mb-4">Contact Us</h3><p><i class="fas fa-phone-alt"></i> 08072550691, 07025553245, 08084816590</p><p><i class="fas fa-envelope"></i> alistiqaamahflyingwingsacademy@gmail.com</p><p><i class="fas fa-map-marker-alt"></i> No. 10 Federal Government Layout, Samaru, Zaria</p></div></div>
+
+<!-- Full Application Modal with Arabic -->
+<div id="fullApplicationModal" class="modal"><div class="modal-content relative" style="max-width: 1100px;"><span class="close-modal-x" onclick="closeModal('fullApplicationModal')">&times;</span><h3 class="text-2xl font-bold text-center mb-2">أكادمية الاستقامة أجنحة التحليق</h3><h4 class="text-xl font-bold text-center mb-1">AL-ISTIQAAMAH FLYING WINGS ACADEMY</h4><p class="text-center text-sm mb-4">No. 10 Federal Government Layout, Samaru, Zaria | 08072550691, 07025553245, 08084816590</p><form id="fullApplicationForm" class="space-y-5" enctype="multipart/form-data"><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">A. APPLICANT INFORMATION / البيانات المتقدم/ة</h3><div class="grid md:grid-cols-2 gap-3"><input name="surname" placeholder="Surname / اسم العائلة" class="border p-2 rounded" required><input name="first_name" placeholder="First Name / الأسم الأول" class="border p-2 rounded" required><input name="other_names" placeholder="Other Names / الأسم الثاني" class="border p-2 rounded"><select name="gender" class="border p-2 rounded"><option>Gender / الجنس</option><option>Male</option><option>Female</option></select><input name="dob" type="date" placeholder="Date of Birth / تاريخ الميلاد" class="border p-2 rounded"><input name="age" type="number" placeholder="Age / العمر" class="border p-2 rounded"><input name="place_birth" placeholder="Place of Birth / مكان الميلاد" class="border p-2 rounded"><input name="nationality" placeholder="Nationality / الجنسية" class="border p-2 rounded"><input name="state_origin" placeholder="State of Origin / الولاية الأصلية" class="border p-2 rounded"><input name="lga" placeholder="Local Government / منطقة الحكم المحلي" class="border p-2 rounded"><select name="religion" class="border p-2 rounded"><option>Religion / الديانة</option><option>Islam</option><option>Christianity</option></select><input name="home_address" placeholder="Home Address / عنوان السكن" class="border p-2 rounded"><input name="child_id" placeholder="National Identification Number(NIN) / الرقم الوطني للطفل" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">B. CLASS / ACADEMIC INFORMATION</h3><div class="grid md:grid-cols-2 gap-3"><select name="desired_class" class="border p-2 rounded" id="appDesiredClass"></select><input name="term_session" placeholder="Term & Academic Session / الفصل الدراسي والسنوات" class="border p-2 rounded"><input name="previous_school" placeholder="Previous School Attended / المدرسة السابقة" class="border p-2 rounded"><input name="last_class_completed" placeholder="Last Class Completed / آخر صف دراسي أنجز" class="border p-2 rounded"><textarea name="reason_leaving" placeholder="Reason for Leaving / سبب ترك المدرسة السابقة" rows="2" class="border p-2 rounded"></textarea><input name="languages_spoken" placeholder="Languages Spoken / النجاحات التي يتحدثها" class="border p-2 rounded"><textarea name="special_needs" placeholder="Special Education Needs / احتياجات تعليمية خاصة" rows="2" class="border p-2 rounded"></textarea></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">C. HEALTH INFORMATION / البيانات الصحية</h3><div class="grid md:grid-cols-2 gap-3"><input name="blood_group" placeholder="Blood Group/Genotype / فصيلة الدم/التركيب الوراثي" class="border p-2 rounded"><input name="allergies" placeholder="Known Allergies / الحساسية (ان وجدت)" class="border p-2 rounded"><input name="physical_challenge" placeholder="Physical Challenge / إعاقات جسدية (ان وجدت)" class="border p-2 rounded"><input name="chronic_illness" placeholder="Chronic Illness / أمراض مزمنة (ان وجدت)" class="border p-2 rounded"><textarea name="emergency_health" placeholder="Emergency Health Info / معلومات طبية طارئة" rows="2" class="border p-2 rounded"></textarea><input name="immunization" placeholder="Immunization Status / حالة التطعيم" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">D. PARENT/GUARDIAN INFORMATION / بيانات الولاد/الوصي</h3><div class="grid md:grid-cols-2 gap-3"><input name="father_name" placeholder="Father's Full Name / اسم الأب كاملًا" class="border p-2 rounded"><input name="mother_name" placeholder="Mother's Full Name / اسم الأم كاملًا" class="border p-2 rounded"><input name="guardian_name" placeholder="Guardian's Name (if any) / اسم الوصي" class="border p-2 rounded"><input name="guardian_relation" placeholder="Relationship to Child / صلة القرابة" class="border p-2 rounded"><input name="parent_occupation" placeholder="Occupation / المهنة" class="border p-2 rounded"><input name="parent_residence" placeholder="Residential Address / عنوان السكن" class="border p-2 rounded"><input name="parent_office" placeholder="Office Address / عنوان الوظيفة" class="border p-2 rounded"><input name="parent_phone" placeholder="Phone Number(s) / رقم الهاتف" class="border p-2 rounded"><input name="parent_email" placeholder="Email Address / البريد الإلكتروني" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">E. SPONSOR/FINANCIAL INFORMATION / بيانات الكفل/الرسوم الدراسية</h3><div class="grid md:grid-cols-2 gap-3"><input name="sponsor_name" placeholder="Name of Sponsor / اسم الكفل" class="border p-2 rounded"><input name="sponsor_relation" placeholder="Relationship to Child / صلة القرابة بالطالب" class="border p-2 rounded"><input name="sponsor_address" placeholder="Contact Address / عنوان الاتصال" class="border p-2 rounded"><input name="sponsor_phone" placeholder="Phone Number / رقم الهاتف" class="border p-2 rounded"><input name="fee_responsible" placeholder="Person Responsible for Fees / الجهة المسؤولة عن الرسوم" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">F. RELIGIOUS INFORMATION (ISLAMIC) / البيانات الدينية</h3><div class="grid md:grid-cols-2 gap-3"><input name="muslim_name" placeholder="Muslim Name / الاسم الإسلامي" class="border p-2 rounded"><input name="quran_reading" placeholder="Qur'an Reading Ability / مستوى قراءة القرآن" class="border p-2 rounded"><input name="memorization_level" placeholder="Level of Qur'an Memorization / مقدار حفظ القرآن" class="border p-2 rounded"><input name="previous_madrasah" placeholder="Previous Madrasah Attended / المدرسة القرآنية السابقة" class="border p-2 rounded"><textarea name="religious_needs" placeholder="Religious Observance Needs / احتياجات دينية خاصة" rows="2" class="border p-2 rounded"></textarea></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">G. TRANSPORT & HOSTEL INFORMATION / بيانات النقل والسكن</h3><div class="grid md:grid-cols-2 gap-3"><input name="transport_mode" placeholder="Mode of Transportation / وسيلة المواصلات" class="border p-2 rounded"><select name="boarding_status" class="border p-2 rounded"><option>Boarding or Day / داخلي خارجي</option><option>Day</option><option>Boarding</option></select><input name="bus_pickup" placeholder="Bus Pick-up & Drop-off Point / مكان الصعود والنزول" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">H. DECLARATION & UNDERTAKING / الإقرار والتعهد</h3><p class="text-sm mb-2">اقرأ بأن جميع المعلومات الواردة أعلاه صحيحة، واتعهد بالالتزام بجميع قوانين وأنظمة المدرسة.</p><div class="grid md:grid-cols-2 gap-3"><input name="declaration_name" placeholder="Name of Parent/Guardian / اسم ولي الأمر / الوصي" class="border p-2 rounded" required><input name="declaration_signature" placeholder="Signature / التوقيع" class="border p-2 rounded"><input name="declaration_date" type="date" placeholder="Date / التاريخ" class="border p-2 rounded"></div></div><div class="border rounded-xl p-4 bg-gray-50"><h3 class="font-bold text-lg mb-2">I. REQUIRED ATTACHMENTS / المرافقات المطلوبة</h3><div class="grid md:grid-cols-2 gap-4"><div><label>Birth Certificate / Declaration of Age</label><input type="file" name="attachment_birth_cert" accept="image/*,application/pdf" class="border p-2 rounded w-full"></div><div><label>Previous School Report / Testimonial</label><input type="file" name="attachment_previous_report" accept="image/*,application/pdf" class="border p-2 rounded w-full"></div><div><label>Transfer Certificate</label><input type="file" name="attachment_transfer_cert" accept="image/*,application/pdf" class="border p-2 rounded w-full"></div><div><label>Medical Report</label><input type="file" name="attachment_medical_report" accept="image/*,application/pdf" class="border p-2 rounded w-full"></div><div><label>Immunization Card</label><input type="file" name="attachment_immunization_card" accept="image/*,application/pdf" class="border p-2 rounded w-full"></div><div><label>Two Recent Passport Photographs</label><input type="file" name="attachment_passport_photos" accept="image/*" class="border p-2 rounded w-full"></div></div></div><button type="submit" class="apply-btn w-full py-3 rounded text-lg font-bold mt-4">Submit Application / تقديم الطلب</button></form></div></div>
+
+<div id="statusCheckModal" class="modal"><div class="modal-content relative" style="max-width: 500px;"><span class="close-modal-x" onclick="closeModal('statusCheckModal')">&times;</span><h3 class="text-xl font-bold mb-3">Check Application Status</h3><input type="email" id="statusEmail" placeholder="Enter your email address" class="border p-3 w-full rounded-xl mb-4"><button id="checkStatusSubmit" class="apply-btn w-full py-2 rounded-xl">Check Status</button><div id="statusResult" class="mt-4 text-center"></div></div></div>
+
+<div id="amountModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('amountModal')">&times;</span><h3 class="text-xl font-bold mb-3">Enter Payment Amount</h3><input type="number" id="paymentAmount" class="border p-3 w-full rounded-xl mb-4" placeholder="Amount in ₦"><button id="confirmAmountBtn" class="apply-btn w-full py-2 rounded-xl">Confirm Payment</button></div></div>
+
+<div id="addStaffModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('addStaffModal')">&times;</span><h2 class="text-xl font-bold mb-3">➕ Add New Staff</h2><form id="addStaffForm"><input id="staffName" placeholder="Full Name" required class="border p-3 w-full mb-2 rounded-xl"><input id="staffEmail" placeholder="Email" class="border p-3 w-full mb-2 rounded-xl"><select id="staffRole" class="border p-3 w-full mb-2 rounded-xl"><option value="teacher">Teacher</option><option value="headteacher">Headteacher</option><option value="daf">DAF</option><option value="do">DO</option><option value="der">DER</option><option value="dprpa">DPRPA</option><option value="dg_ceo">DG/CEO</option></select><input id="staffSection" placeholder="Section" class="border p-3 w-full mb-2 rounded-xl"><input id="staffAssignedClass" placeholder="Assigned Class" class="border p-3 w-full mb-2 rounded-xl"><input id="staffSalary" type="number" placeholder="Salary (₦)" class="border p-3 w-full mb-2 rounded-xl"><input id="newStaffUsername" placeholder="Staff ID (username)" required class="border p-3 w-full mb-2 rounded-xl"><input id="newStaffPassword" placeholder="Password" type="password" value="pass123" class="border p-3 w-full mb-3 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl">Create Staff</button></form></div></div>
+
+<div id="appraisalModal" class="modal"><div class="modal-content relative" style="max-width: 600px;"><span class="close-modal-x" onclick="closeModal('appraisalModal')">&times;</span><h3 class="text-xl font-bold mb-3">Staff Appraisal</h3><form id="appraisalForm"><select id="appraisalStaffSelect" class="border p-2 w-full mb-2 rounded" required><option>Select Staff</option></select><label class="block font-medium mt-2">Overall Rating (1-5):</label><input type="number" id="appraisalRating" min="1" max="5" class="border p-2 w-full rounded mb-2" required><label class="block font-medium">Comments / Feedback:</label><textarea id="appraisalComment" rows="3" class="border p-2 w-full rounded mb-3"></textarea><button type="submit" class="apply-btn w-full py-2 rounded">Submit Appraisal</button></form></div></div>
+
+<!-- Accept Details Modal with Signature Pad -->
+<div id="acceptDetailsModal" class="modal"><div class="modal-content relative" style="max-width: 700px;"><span class="close-modal-x" onclick="closeModal('acceptDetailsModal')">&times;</span><h3 class="text-xl font-bold mb-3">Accept Application – Official Use Only</h3><form id="acceptDetailsForm"><input type="hidden" id="acceptAppId"><div class="grid grid-cols-2 gap-3 mb-2"><div><label>Entrance Test Score:</label><input id="acceptEntranceScore" class="border p-2 w-full rounded"></div><div><label>Class Admitted Into:</label><input id="acceptAdmittedClass" class="border p-2 w-full rounded"></div><div><label>Admission Number:</label><input id="acceptAdmissionNumber" class="border p-2 w-full rounded"></div><div><label>Date of Admission:</label><input type="date" id="acceptAdmissionDate" class="border p-2 w-full rounded"></div></div><div class="mb-2"><label>Interview Remarks:</label><textarea id="acceptInterviewRemarks" rows="2" class="border p-2 w-full rounded"></textarea></div><div class="border rounded p-3 mb-3 bg-gray-50"><label class="block font-bold mb-2">Authorized Signature (Draw below):</label><canvas id="signatureCanvas" width="400" height="150" style="border:1px solid #ccc; background:white; width:100%; height:150px;"></canvas><div class="flex gap-2 mt-2"><button type="button" id="clearSignatureBtn" class="bg-gray-500 text-white px-3 py-1 rounded text-sm">Clear</button><button type="button" id="undoSignatureBtn" class="bg-gray-500 text-white px-3 py-1 rounded text-sm">Undo</button></div><input type="hidden" id="acceptSignatureData" value=""></div><div class="mb-2"><label>Authorized Name (Printed):</label><input id="acceptSignature" class="border p-2 w-full rounded"></div><button type="submit" class="apply-btn w-full py-2 rounded">Accept & Save</button></form></div></div>
+
+<div id="addStaffToPayrollModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('addStaffToPayrollModal')">&times;</span><h3 class="text-xl font-bold mb-3">Add Staff to Payroll</h3><form id="addToPayrollForm"><label>Select Staff:</label><select id="payrollStaffSelect" class="border p-2 w-full rounded mb-3" required><option value="">-- Select Staff --</option></select><label>Basic Salary (₦):</label><input type="number" id="payrollStaffSalary" class="border p-2 w-full rounded mb-3"><label>Allowances (₦):</label><input type="number" id="payrollStaffAllowances" class="border p-2 w-full rounded mb-3" value="0"><label>Deductions (₦):</label><input type="number" id="payrollStaffDeductions" class="border p-2 w-full rounded mb-3" value="0"><label>Account Details:</label><input id="payrollStaffAccount" class="border p-2 w-full rounded mb-3"><button type="submit" class="apply-btn w-full py-2 rounded">Add to Payroll</button></form></div></div>
+
+<div id="emailFeedbackModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('emailFeedbackModal')">&times;</span><h3 class="text-xl font-bold">Send Acceptance</h3><textarea id="feedbackMessage" rows="3" class="border w-full p-3 rounded-xl my-2"></textarea><button id="confirmAcceptBtn" class="apply-btn w-full py-2 rounded-xl">Confirm & Send</button></div></div>
+
+<!-- User Settings Modal -->
+<div id="userSettingsModal" class="modal"><div class="modal-content relative" style="max-width: 500px;"><span class="close-modal-x" onclick="closeModal('userSettingsModal')">&times;</span><h2 class="text-2xl font-bold mb-4">⚙️ Account Settings</h2><div class="text-center mb-6"><div class="relative inline-block"><div id="settingsAvatarPreview" class="w-24 h-24 rounded-full bg-amber-500 text-white flex items-center justify-center text-3xl font-bold mx-auto border-4 border-gray-200 overflow-hidden"><i class="fas fa-user"></i></div><button id="uploadAvatarBtn" class="absolute bottom-0 right-0 bg-amber-500 text-white rounded-full p-1.5 text-xs hover:bg-amber-600 transition"><i class="fas fa-camera"></i></button><input type="file" id="avatarFileInput" accept="image/*" class="hidden"></div><p class="text-xs text-gray-500 mt-2">Click camera icon to upload profile picture</p></div><form id="settingsForm" class="space-y-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Full Name</label><input type="text" id="settingsFullName" class="border p-3 w-full rounded-xl"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Email</label><input type="email" id="settingsEmail" class="border p-3 w-full rounded-xl bg-gray-50" disabled></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Role</label><input type="text" id="settingsRole" class="border p-3 w-full rounded-xl bg-gray-50" disabled></div><hr class="my-4"><div><h3 class="font-medium text-gray-700 mb-2">🔑 Change Password</h3><div class="space-y-3"><div><label class="block text-sm font-medium text-gray-600 mb-1">Current Password</label><input type="password" id="settingsCurrentPassword" placeholder="Enter current password" class="border p-3 w-full rounded-xl"></div><div><label class="block text-sm font-medium text-gray-600 mb-1">New Password</label><input type="password" id="settingsNewPassword" placeholder="Enter new password" class="border p-3 w-full rounded-xl"></div><div><label class="block text-sm font-medium text-gray-600 mb-1">Confirm New Password</label><input type="password" id="settingsConfirmPassword" placeholder="Confirm new password" class="border p-3 w-full rounded-xl"></div></div></div><button type="submit" class="apply-btn w-full py-3 rounded-xl text-lg font-semibold"><i class="fas fa-save mr-2"></i> Save Changes</button></form></div></div>
+
+<!-- DASHBOARD CONTAINER with User Settings dropdown -->
+<div id="appContainer" class="hidden flex flex-col h-screen fixed inset-0 z-40 bg-gray-50">
+    <div class="bg-white/80 backdrop-blur-md shadow-sm px-6 py-3 flex justify-between items-center border-b border-gray-100">
+        <div class="flex items-center gap-3"><button id="mobileMenuToggle" class="text-2xl md:hidden text-emerald-800"><i class="fas fa-bars"></i></button><span class="font-bold text-emerald-800 text-xl">🏫 Flying Wings Portal</span></div>
+        <div class="flex items-center gap-4">
+            <div class="relative" id="userSettingsDropdown">
+                <button id="userMenuBtn" class="flex items-center gap-2 hover:bg-gray-100 rounded-full px-3 py-1 transition">
+                    <span id="userAvatarDisplay" class="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold"><i class="fas fa-user"></i></span>
+                    <span class="text-gray-700 hidden md:inline"><span id="topUserName"></span> <span class="text-xs text-gray-400">(<span id="topUserRole"></span>)</span></span>
+                    <i class="fas fa-chevron-down text-xs text-gray-400"></i>
+                </button>
+                <div id="userDropdownMenu" class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 hidden z-50 overflow-hidden">
+                    <div class="p-4 border-b border-gray-100">
+                        <div class="flex items-center gap-3">
+                            <span id="userAvatarDropdown" class="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold"><i class="fas fa-user"></i></span>
+                            <div class="flex-1 min-w-0"><p id="dropdownUserName" class="font-semibold text-gray-800 truncate">User</p><p id="dropdownUserRole" class="text-xs text-gray-500 truncate">Role</p></div>
+                        </div>
+                        <p id="dropdownUserEmail" class="text-xs text-gray-500 mt-1 truncate">email@example.com</p>
+                    </div>
+                    <div class="py-1">
+                        <button id="settingsBtn" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-3 transition"><i class="fas fa-cog text-gray-500 w-5"></i> Settings</button>
+                        <hr class="my-1"><button id="logoutBtnHeader" class="w-full text-left px-4 py-2 text-sm hover:bg-red-50 text-red-600 flex items-center gap-3 transition"><i class="fas fa-sign-out-alt text-red-500 w-5"></i> Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="flex flex-1 overflow-hidden relative">
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+        <aside id="dynamicSidebar" class="sidebar text-white flex flex-col shadow-xl">
+            <div class="p-5 border-b border-white/10 flex justify-between items-center"><span class="font-semibold text-lg"><i class="fas fa-compass mr-2"></i>Menu</span><button id="closeMobileSidebar" class="md:hidden text-white text-2xl">&times;</button></div>
+            <nav id="dynamicNav" class="flex-1 px-3 py-5 space-y-1"></nav>
+        </aside>
+        <main id="mainContent" class="flex-1 overflow-auto p-6"></main>
+    </div>
 </div>
 <!-- ========== MODALS ========== -->
 <div id="loginModal" class="modal"><div class="modal-content relative"><span class="close-modal-x" onclick="closeModal('loginModal')">&times;</span><h2 class="text-2xl font-bold mb-4">Access Portal</h2><div class="flex gap-3 mb-4"><button id="adminTab" class="flex-1 py-2 bg-amber-500 rounded-full text-white">Admin</button><button id="staffTab" class="flex-1 py-2 bg-gray-200 rounded-full">Staff</button></div><form id="adminLoginForm"><input id="adminEmail" placeholder="Email" class="border p-3 w-full mb-3 rounded-xl"><input id="adminPassword" placeholder="Password" type="password" class="border p-3 w-full mb-4 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl font-semibold">Login</button></form><form id="staffLoginForm" style="display:none"><input id="staffUsername" placeholder="Staff ID" class="border p-3 w-full mb-3 rounded-xl"><input id="staffPassword" placeholder="Password" type="password" class="border p-3 w-full mb-4 rounded-xl"><button type="submit" class="apply-btn w-full py-3 rounded-xl">Login</button></form></div></div>
@@ -162,449 +228,8 @@
         </aside>
         <main id="mainContent" class="flex-1 overflow-auto p-6"></main>
     </div>
-       <script>
-// ========== SUPABASE CONFIG ==========
-const SUPABASE_URL = 'https://kabqdeulwpfftbtwwouw.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_OIE7KFQ3quev7pQgKsvFXg_ralf9SMM';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const PAYSTACK_PUBLIC_KEY = 'pk_test_d4f8b2c1a3e5f6b7c8d9e0f1a2b3c4d5e6f7a8b9';
-const CLASSES = ["Pre-Nursery","Nursery 1","Nursery 2","Nursery 3","Primary 1","Primary 2","Primary 3","Primary 4","Primary 5","Primary 6","JSS 1","JSS 2","JSS 3","SS 1","SS 2","SS 3"];
-const SECTIONS = ["regular islamiyyah","regular memorization","intensive memorization","integrated islamic basic section","advance section","woman section"];
-const TERMS = ["1st Term", "2nd Term", "3rd Term"];
-const QUALITIES = ["Class Attendance","Neatness in Appearance","Politeness","Honesty","Relationship with Others","Self Control","Helping Others","Sense of Responsibility","Initiative/Creativity","Emotional Stability","Physical Health","Perseverance"];
-const QUALITIES_ARABIC = {
-    "Class Attendance": "حضور الفصل",
-    "Neatness in Appearance": "نظافة المشرف",
-    "Politeness": "الطفول",
-    "Honesty": "الصدق والإحالة",
-    "Relationship with Others": "العلاقة مع الأخرين",
-    "Self Control": "الاستغلال على النفس",
-    "Helping Others": "المساعدة في المجتمع",
-    "Sense of Responsibility": "حساسية الإنجاز",
-    "Initiative/Creativity": "التمكين والإبداع",
-    "Emotional Stability": "التوتر والتماسك",
-    "Physical Health": "الصحة المادية",
-    "Perseverance": "مشاريع"
-};
-
-let currentUser = null;
-let schoolData = { students: [], teachers: [], profiles: [], applications: [], results: [], payments: [], bankTransfers: [], staffAppraisals: [], slides: [], announcements: [], resultExtras: [], payrollRecords: [], dgAppraisals: [], studentAppraisals: [], attendance: [] };
-let carouselInterval = null;
-let currentSlideIdx = 0;
-let carouselSlides = [];
-let pendingPaymentAction = null;
-let signaturePad = null;
-
-// ========== UTILITIES ==========
-function showToast(msg, isErr=false) {
-    let t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.backgroundColor = isErr ? '#dc2626' : '#10b981';
-    t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 4000);
-}
-function showLoading(show) {
-    document.getElementById('globalLoader').style.display = show ? 'flex' : 'none';
-}
-function escapeHtml(str) {
-    return String(str ?? '').replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[m]);
-}
-function closeModal(id) {
-    document.getElementById(id).style.display = 'none';
-}
-
-// ========== DATA REFRESH ==========
-async function refreshData() {
-    showLoading(true);
-    try {
-        const [sRes, tRes, pRes, aRes, rRes, payRes, btRes, saRes, slRes, annRes, rexRes, payrollRes, dgRes, stuAppRes, attRes] = await Promise.all([
-            supabaseClient.from('students').select('*'),
-            supabaseClient.from('teachers').select('*'),
-            supabaseClient.from('profiles').select('*'),
-            supabaseClient.from('applications').select('*'),
-            supabaseClient.from('results').select('*'),
-            supabaseClient.from('payments').select('*'),
-            supabaseClient.from('bank_transfers').select('*'),
-            supabaseClient.from('staff_appraisals').select('*'),
-            supabaseClient.from('slides').select('*'),
-            supabaseClient.from('site_announcement').select('*').limit(1),
-            supabaseClient.from('result_extras').select('*'),
-            supabaseClient.from('payroll_records').select('*'),
-            supabaseClient.from('dg_appraisals').select('*'),
-            supabaseClient.from('student_appraisals').select('*'),
-            supabaseClient.from('attendance').select('*')
-        ]);
-        schoolData = {
-            students: sRes.data || [],
-            teachers: tRes.data || [],
-            profiles: pRes.data || [],
-            applications: aRes.data || [],
-            results: rRes.data || [],
-            payments: payRes.data || [],
-            bankTransfers: btRes.data || [],
-            staffAppraisals: saRes.data || [],
-            slides: slRes.data || [],
-            announcements: annRes.data || [],
-            resultExtras: rexRes.data || [],
-            payrollRecords: payrollRes.data || [],
-            dgAppraisals: dgRes.data || [],
-            studentAppraisals: stuAppRes.data || [],
-            attendance: attRes.data || []
-        };
-        updateCarouselData();
-    } catch(e) {
-        console.error(e);
-    } finally {
-        showLoading(false);
-    }
-}
-
-// ========== CAROUSEL LOGIC ==========
-function updateCarouselData() {
-    carouselSlides = schoolData.slides.length ? schoolData.slides : [{ image_url: 'https://placehold.co/1200x500?text=Al-Istiqaamah+Flying+Wings', caption: 'Empowering Minds & Souls' }];
-    renderCarousel();
-    if (carouselInterval) clearInterval(carouselInterval);
-    if (carouselSlides.length > 1) {
-        carouselInterval = setInterval(nextSlide, 5000);
-    }
-}
-function renderCarousel() {
-    const container = document.getElementById('slidesContainer');
-    const dots = document.getElementById('dotsContainer');
-    if (!container) return;
-    const slide = carouselSlides[currentSlideIdx];
-    container.innerHTML = `<img src="${slide.image_url}" class="w-full h-full object-cover" alt="slide" onerror="this.src='https://placehold.co/1200x500?text=Image+Not+Found'"><div class="absolute bottom-4 left-0 right-0 text-center text-white bg-black/50 p-2">${escapeHtml(slide.caption || '')}</div>`;
-    if (dots) {
-        dots.innerHTML = carouselSlides.map((_, i) => `<span class="dot w-3 h-3 rounded-full mx-1 ${i === currentSlideIdx ? 'bg-amber-500' : 'bg-gray-400'} cursor-pointer"></span>`).join('');
-        document.querySelectorAll('.dot').forEach((dot, i) => dot.addEventListener('click', () => {
-            currentSlideIdx = i;
-            renderCarousel();
-        }));
-    }
-}
-function nextSlide() {
-    if (carouselSlides.length) {
-        currentSlideIdx = (currentSlideIdx + 1) % carouselSlides.length;
-        renderCarousel();
-    }
-}
-function prevSlide() {
-    if (carouselSlides.length) {
-        currentSlideIdx = (currentSlideIdx - 1 + carouselSlides.length) % carouselSlides.length;
-        renderCarousel();
-    }
-}
-async function renderLandingCarouselAndAnnouncement() {
-    const ann = schoolData.announcements[0]?.content || 'Welcome to Flying Wings – Excellence in Islamic Education';
-    document.getElementById('announcementBarWrapper').innerHTML = `<div class="bg-amber-100 border-l-4 border-amber-500 p-3 rounded-r-xl">📢 ${escapeHtml(ann)}</div>`;
-    updateCarouselData();
-}
-
-// ========== AUTHENTICATION ==========
-async function adminLogin(email, pwd) {
-    let { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: pwd });
-    if (error) throw error;
-    let { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', data.user.id).single();
-    if (!profile) {
-        const { data: newProfile, error: insertError } = await supabaseClient.from('profiles').insert([
-            { id: data.user.id, full_name: email.split('@')[0], role: 'teacher', email: email }
-        ]).select().single();
-        if (insertError) throw new Error('Could not create profile');
-        profile = newProfile;
-    }
-    currentUser = {
-        id: profile.id,
-        full_name: profile.full_name,
-        role: profile.role,
-        email: profile.email || email,
-        avatar_url: profile.avatar_url || null
-    };
-    await refreshData();
-    closeModal('loginModal');
-    document.getElementById('landingPage').style.display = 'none';
-    document.getElementById('appContainer').classList.remove('hidden');
-    showToast(`Welcome ${currentUser.full_name}`);
-    showDashboard();
-}
-async function staffLogin(username, pwd) {
-    let { data: staff, error } = await supabaseClient.from('teachers').select('*').eq('username', username).single();
-    if (error || !staff) throw new Error('Staff not found');
-    if (staff.password !== pwd) throw new Error('Wrong password');
-    currentUser = {
-        id: staff.id,
-        full_name: staff.name,
-        role: staff.role || 'teacher',
-        assigned_class: staff.assigned_class,
-        email: staff.email || '',
-        avatar_url: null
-    };
-    await refreshData();
-    closeModal('loginModal');
-    document.getElementById('landingPage').style.display = 'none';
-    document.getElementById('appContainer').classList.remove('hidden');
-    showToast(`Welcome ${currentUser.full_name}`);
-    showDashboard();
-}
-async function parentLogin(regNo, pwd) {
-    if (pwd !== 'al123') throw new Error('Invalid password');
-    let student = schoolData.students.find(s => s.reg_number === regNo);
-    if (!student) throw new Error('Student not found');
-    currentUser = {
-        role: 'parent',
-        full_name: `Parent of ${student.name}`,
-        studentId: student.id,
-        email: student.parent_email || '',
-        avatar_url: null
-    };
-    await refreshData();
-    closeModal('parentModal');
-    document.getElementById('landingPage').style.display = 'none';
-    document.getElementById('appContainer').classList.remove('hidden');
-    showToast(`Logged in as parent of ${student.name}`);
-    showDashboard();
-}
-async function adminSignup(code, email, pwd, name, role) {
-    if (code !== 'ALIFLY2026') throw new Error('Invalid code');
-    let { data, error } = await supabaseClient.auth.signUp({ email, password: pwd });
-    if (error) throw error;
-    await supabaseClient.from('profiles').insert([
-        { id: data.user.id, full_name: name, role: role, email: email }
-    ]);
-    showToast('Account created! Please verify email and login.');
-    closeModal('adminSignupModal');
-}
-function logoutUser() {
-    if (carouselInterval) clearInterval(carouselInterval);
-    currentUser = null;
-    document.getElementById('appContainer').classList.add('hidden');
-    document.getElementById('landingPage').style.display = 'block';
-    renderLandingCarouselAndAnnouncement();
-    showToast("Logged out");
-}
-
-// ========== DASHBOARD & MENU ==========
-const roleMenus = {
-    dg_ceo: ['Dashboard','Students','Enroll','Results','Fees','Unified Staff','Payroll','Apps','Download Records','Announce','Slides','View Appraisals','Performance Appraisal','Director Roles','Appraise Directors'],
-    daf: ['Dashboard','Students','Enroll','Results','Fees','Unified Staff','Payroll','Apps','Download Records','Announce','Slides','Staff Appraisal'],
-    management_committee: ['Dashboard','Students','Enroll','Results','Fees','Unified Staff','Apps','Download Records','Announce','Slides','View Appraisals','Director Roles','Appraise Directors'],
-    teacher: ['My class','Grade student','Attendance','Results'],
-    headteacher: ['Section student','Section fees','Enroll','Results','Students','Fees'],
-    do: ['Dashboard','Enroll','Fees','Students','Unified Staff','Staff performance analysis','Staff Appraisal','Announce','Slides'],
-    der: ['Dashboard','Enroll','Students','Unified Staff','Academic performance','Sections analysis','Staff Appraisal','Announce','Slides'],
-    dprpa: ['Dashboard','Enroll','Students','Academic performance','Section analysis','Download Records','Staff Appraisal','Announce','Slides'],
-    parent: ['Result', 'Fee payment', 'Payment history']
-};
-
-async function dashboardView() {
-    document.getElementById('mainContent').innerHTML = `<div class="card p-6"><h2 class="text-2xl font-bold text-gray-800 mb-4"><i class="fas fa-tachometer-alt text-amber-600 mr-2"></i>Dashboard</h2><div class="grid grid-cols-1 md:grid-cols-4 gap-5"><div class="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-2xl shadow"><i class="fas fa-users text-3xl text-blue-600"></i><p class="text-2xl font-bold mt-2">${schoolData.students.length}</p><p>Students</p></div><div class="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-2xl shadow"><i class="fas fa-chalkboard-user text-3xl text-green-600"></i><p class="text-2xl font-bold mt-2">${schoolData.teachers.length + schoolData.profiles.filter(p=>p.role !== 'parent').length}</p><p>Staff</p></div><div class="bg-gradient-to-br from-yellow-50 to-yellow-100 p-5 rounded-2xl shadow"><i class="fas fa-money-bill-wave text-3xl text-yellow-600"></i><p class="text-2xl font-bold mt-2">₦${schoolData.payments.reduce((a,b)=>a+(b.amount||0),0).toLocaleString()}</p><p>Fees Collected</p></div><div class="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-2xl shadow"><i class="fas fa-file-alt text-3xl text-purple-600"></i><p class="text-2xl font-bold mt-2">${schoolData.applications.length}</p><p>Applications</p></div></div></div>`;
-}
-
-function showDashboard() {
-    const appContainer = document.getElementById('appContainer');
-    const landingPage = document.getElementById('landingPage');
-    const topUserName = document.getElementById('topUserName');
-    const topUserRole = document.getElementById('topUserRole');
-    const dynamicNav = document.getElementById('dynamicNav');
-    if (!appContainer || !topUserName || !topUserRole || !dynamicNav) {
-        console.error("Dashboard elements missing. Refresh the page.");
-        showToast("Dashboard elements missing. Refresh the page.", true);
-        return;
-    }
-    landingPage.style.display = 'none';
-    appContainer.classList.remove('hidden');
-    updateUserUI();
-
-    let menu = roleMenus[currentUser.role] || roleMenus.dg_ceo;
-    let navHtml = '';
-    if (currentUser.role === 'parent') {
-        const parentItems = menu.map(label => ({ label, icon: label === 'Result' ? 'fa-chart-line' : (label === 'Fee payment' ? 'fa-money-bill' : 'fa-history') }));
-        navHtml = parentItems.map(item => `<div class="nav-link flex items-center gap-3 px-4 py-2 rounded-xl text-slate-200 hover:bg-white/10 transition" data-view="${item.label}"><i class="fas ${item.icon} w-6"></i><span class="nav-text">${item.label}</span></div>`).join('');
-    } else {
-        navHtml = menu.map(label => `<div class="nav-link flex items-center gap-3 px-4 py-2 rounded-xl text-slate-200 hover:bg-white/10 transition" data-view="${label}"><i class="fas ${label==='Dashboard'?'fa-tachometer-alt':label==='Students'?'fa-users':label==='Fees'?'fa-coins':label==='Payroll'?'fa-money-bill':label==='Result'?'fa-chart-line':'fa-circle'} w-6"></i><span class="nav-text">${label}</span></div>`).join('');
-    }
-    dynamicNav.innerHTML = navHtml;
-
-    const viewMap = {
-        'Dashboard': dashboardView,
-        'Students': studentsViewEditable,
-        'Enroll': enrollViewModern,
-        'Results': enhancedResultView,
-        'Fees': feeManagementEnhanced,
-        'Unified Staff': unifiedStaffList,
-        'Payroll': payrollModule,
-        'Apps': applicationsViewEnhanced,
-        'Download Records': downloadRecordsView,
-        'Announce': announceView,
-        'Slides': slidesManageView,
-        'Staff Appraisal': staffAppraisalView,
-        'View Appraisals': viewAppraisalsView,
-        'Performance Appraisal': performanceAppraisalView,
-        'Director Roles': directorRolesView,
-        'Appraise Directors': directorAppraisalView,
-        'Result': (currentUser.role === 'parent') ? parentResultViewSimple : enhancedResultView,
-        'Fee payment': parentPaymentPortalView,
-        'Payment history': parentPaymentHistoryView,
-        'My class': myClassView,
-        'Grade student': teacherResultEntry,
-        'Attendance': attendanceView,
-        'Section student': sectionStudentsView,
-        'Section fees': sectionFeesView,
-        'Staff performance analysis': staffPerformanceAnalysisView,
-        'Academic performance': academicPerformanceView,
-        'Sections analysis': sectionAnalysisView
-    };
-
-    document.querySelectorAll('.nav-link').forEach(el => {
-        el.removeEventListener('click', el._listener);
-        const handler = () => {
-            let fn = viewMap[el.dataset.view];
-            if (fn) fn();
-            else if (currentUser.role === 'parent') parentResultViewSimple();
-            else dashboardView();
-            document.getElementById('dynamicSidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('active');
-        };
-        el._listener = handler;
-        el.addEventListener('click', handler);
-    });
-
-    if (currentUser.role === 'parent') parentResultViewSimple();
-    else dashboardView();
-}
-
-// ========== USER SETTINGS UI ==========
-function updateUserUI() {
-    if (!currentUser) return;
-    const initials = currentUser.full_name ? currentUser.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U';
-    const avatarUrl = currentUser.avatar_url || null;
-    ['userAvatarDisplay', 'userAvatarDropdown'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) {
-            if (avatarUrl) {
-                el.innerHTML = `<img src="${avatarUrl}" class="w-full h-full rounded-full object-cover">`;
-            } else {
-                el.innerHTML = `<span class="text-sm font-bold">${initials}</span>`;
-                el.style.background = '#f59e0b';
-                el.style.color = 'white';
-            }
-        }
-    });
-    document.getElementById('topUserName').innerText = currentUser.full_name || 'User';
-    document.getElementById('topUserRole').innerText = currentUser.role || 'GUEST';
-    document.getElementById('dropdownUserName').innerText = currentUser.full_name || 'User';
-    document.getElementById('dropdownUserRole').innerText = currentUser.role || 'GUEST';
-    document.getElementById('dropdownUserEmail').innerText = currentUser.email || 'No email';
-}
-
-// Toggle dropdown
-document.getElementById('userMenuBtn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    document.getElementById('userDropdownMenu').classList.toggle('hidden');
-});
-document.addEventListener('click', () => {
-    const menu = document.getElementById('userDropdownMenu');
-    if (!menu.classList.contains('hidden')) menu.classList.add('hidden');
-});
-
-// Open settings modal
-document.getElementById('settingsBtn')?.addEventListener('click', () => {
-    document.getElementById('userDropdownMenu').classList.add('hidden');
-    openSettingsModal();
-});
-
-function openSettingsModal() {
-    const modal = document.getElementById('userSettingsModal');
-    modal.style.display = 'flex';
-    document.getElementById('settingsFullName').value = currentUser.full_name || '';
-    document.getElementById('settingsEmail').value = currentUser.email || 'No email';
-    document.getElementById('settingsRole').value = currentUser.role || 'GUEST';
-    const preview = document.getElementById('settingsAvatarPreview');
-    if (currentUser.avatar_url) {
-        preview.innerHTML = `<img src="${currentUser.avatar_url}" class="w-full h-full rounded-full object-cover">`;
-    } else {
-        const initials = currentUser.full_name ? currentUser.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U';
-        preview.innerHTML = `<span class="text-3xl font-bold">${initials}</span>`;
-        preview.style.background = '#f59e0b';
-        preview.style.color = 'white';
-    }
-    document.getElementById('settingsCurrentPassword').value = '';
-    document.getElementById('settingsNewPassword').value = '';
-    document.getElementById('settingsConfirmPassword').value = '';
-}
-
-// Upload avatar
-document.getElementById('uploadAvatarBtn')?.addEventListener('click', () => document.getElementById('avatarFileInput').click());
-document.getElementById('avatarFileInput')?.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { showToast("Please select an image file", true); return; }
-    if (file.size > 2 * 1024 * 1024) { showToast("Image must be less than 2MB", true); return; }
-    showLoading(true);
-    try {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${currentUser.id}_${Date.now()}.${fileExt}`;
-        const path = `profile-pictures/${fileName}`;
-        const { error: uploadError } = await supabaseClient.storage.from('profile-pictures').upload(path, file);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabaseClient.storage.from('profile-pictures').getPublicUrl(path);
-        const { error: updateError } = await supabaseClient.from('profiles').update({ avatar_url: publicUrl }).eq('id', currentUser.id);
-        if (updateError) throw updateError;
-        currentUser.avatar_url = publicUrl;
-        updateUserUI();
-        const preview = document.getElementById('settingsAvatarPreview');
-        preview.innerHTML = `<img src="${publicUrl}" class="w-full h-full rounded-full object-cover">`;
-        showToast("Profile picture uploaded successfully!");
-    } catch (err) {
-        showToast(err.message, true);
-    } finally {
-        showLoading(false);
-        document.getElementById('avatarFileInput').value = '';
-    }
-});
-
-// Save settings
-document.getElementById('settingsForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    showLoading(true);
-    try {
-        const fullName = document.getElementById('settingsFullName').value.trim();
-        const currentPassword = document.getElementById('settingsCurrentPassword').value;
-        const newPassword = document.getElementById('settingsNewPassword').value;
-        const confirmPassword = document.getElementById('settingsConfirmPassword').value;
-        if (fullName && fullName !== currentUser.full_name) {
-            const { error } = await supabaseClient.from('profiles').update({ full_name: fullName }).eq('id', currentUser.id);
-            if (error) throw error;
-            currentUser.full_name = fullName;
-        }
-        if (newPassword || currentPassword || confirmPassword) {
-            if (!currentPassword) { showToast("Current password is required to change password", true); return; }
-            if (newPassword !== confirmPassword) { showToast("New passwords do not match", true); return; }
-            if (newPassword.length < 6) { showToast("New password must be at least 6 characters", true); return; }
-            const { error: signInError } = await supabaseClient.auth.signInWithPassword({
-                email: currentUser.email,
-                password: currentPassword
-            });
-            if (signInError) { showToast("Current password is incorrect", true); return; }
-            const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
-            if (updateError) throw updateError;
-            showToast("Password updated successfully!");
-        }
-        await refreshData();
-        updateUserUI();
-        showToast("Settings saved successfully!");
-        closeModal('userSettingsModal');
-    } catch (err) {
-        showToast(err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
-
-// Logout handlers
-document.getElementById('logoutBtn')?.addEventListener('click', logoutUser);
-document.getElementById('logoutBtnHeader')?.addEventListener('click', logoutUser); 
-       </div>
-  <script>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           </div>
+ <script>
 // ========== SUPABASE CONFIG ==========
 const SUPABASE_URL = 'https://kabqdeulwpfftbtwwouw.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_OIE7KFQ3quev7pQgKsvFXg_ralf9SMM';
@@ -1045,7 +670,7 @@ document.getElementById('settingsForm')?.addEventListener('submit', async (e) =>
 // Logout handlers
 document.getElementById('logoutBtn')?.addEventListener('click', logoutUser);
 document.getElementById('logoutBtnHeader')?.addEventListener('click', logoutUser);
-  // ========== ENROLLMENT UI ==========
+     // ========== ENROLLMENT UI ==========
 async function enrollViewModern() {
     const html = `<div class="max-w-2xl mx-auto"><div class="enroll-card p-6 md:p-8"><div class="flex items-center gap-3 mb-6 border-b pb-4"><i class="fas fa-user-plus text-3xl text-emerald-600"></i><h2 class="text-2xl font-bold text-gray-800">Enroll New Student</h2></div><form id="modernEnrollForm" class="space-y-5"><div class="grid md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium text-gray-700 mb-1">Full Name *</label><input type="text" id="enrollName" required class="w-full border rounded-xl p-3 focus:ring-2 focus:ring-emerald-500"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Registration Number *</label><input type="text" id="enrollRegNo" required class="w-full border rounded-xl p-3 focus:ring-2 focus:ring-emerald-500"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Parent/Guardian Name</label><input type="text" id="enrollParent" class="w-full border rounded-xl p-3"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Parent Email</label><input type="email" id="enrollParentEmail" class="w-full border rounded-xl p-3"></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Section</label><select id="enrollSection" class="w-full border rounded-xl p-3">${SECTIONS.map(s=>`<option>${s}</option>`).join('')}</select></div><div><label class="block text-sm font-medium text-gray-700 mb-1">Academic Class</label><select id="enrollClass" class="w-full border rounded-xl p-3">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select></div></div><div class="pt-4"><button type="submit" class="apply-btn w-full py-3 rounded-xl text-lg font-semibold transition transform hover:scale-[1.01]"><i class="fas fa-save mr-2"></i>Register Student</button></div></form></div></div>`;
     document.getElementById('mainContent').innerHTML = html;
@@ -1497,7 +1122,8 @@ async function payrollModule() {
     });
 
     loadPayroll();
-           }         // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
+     }
+     // ========== ENHANCED RESULTS WITH RANKING AND PRINT RESULT SLIP ==========
 async function printResultSlip(studentId, term, year) {
     const student = schoolData.students.find(s => s.id == studentId);
     if (!student) { showToast("Student not found", true); return; }
@@ -2051,8 +1677,8 @@ async function directorAppraisalView() {
         document.getElementById('appraisalComments').value = '';
         await refreshData();
     };
-           }
-// ========== PARENT FUNCTIONS ==========
+     }
+     // ========== PARENT FUNCTIONS ==========
 async function parentResultViewSimple() {
     let studentId = currentUser.studentId;
     if (!studentId) {
